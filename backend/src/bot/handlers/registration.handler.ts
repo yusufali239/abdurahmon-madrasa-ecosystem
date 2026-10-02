@@ -63,8 +63,8 @@ export class RegistrationHandler implements OnModuleInit {
         if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => undefined);
         return this.prompt(user);
       }
-      if (ctx.message?.text === '/start') {
-        await this.botService.setPending(user.id, null);
+      // /start -> главное меню (если нет обязательного незавершённого действия)
+      if (ctx.message?.text === '/start' && !user.pendingAction) {
         return this.menu.show(user, ctx.isAdmin);
       }
       return next();

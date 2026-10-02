@@ -8,3 +8,6 @@ export type BotContext = Context & {
 };
 
 export type PendingHandler = (ctx: BotContext, user: User, payload: any) => Promise<void>;
+
+/** Повторный вопрос, если пользователь пытается уйти от обязательного действия */
+export type PendingReprompt = (ctx: BotContext, user: User, payload: any) => Promise<unknown>;

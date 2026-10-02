@@ -2,7 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@ne
 import { Api, Bot, Composer, GrammyError, HttpError } from 'grammy';
 import { AppConfig } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { BotContext, PendingHandler } from './bot.types';
+import { BotContext, PendingHandler, PendingReprompt } from './bot.types';
 
 /**
  * Обёртка над grammY.
@@ -17,7 +17,7 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
   readonly core = new Composer<BotContext>();
   /** Функциональные обработчики (уроки, посещаемость, новости...) */
   readonly features = new Composer<BotContext>();
-  private readonly pending = new Map<string, PendingHandler>();
+  private readonly pending = new Map<string, { handler: PendingHandler; reprompt?: PendingReprompt }>();
 
   constructor(
     private readonly cfg: AppConfig,
@@ -62,9 +62,12 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
     return this.bot?.api ?? null;
   }
 
-  /** Обработчик текста, когда у пользователя установлен pendingAction */
-  onPendingAction(action: string, handler: PendingHandler) {
-    this.pending.set(action, handler);
+  /**
+   * Обработчик текста, когда у пользователя установлен pendingAction.
+   * Если задан reprompt — действие обязательное: любые другие апдейты возвращают к вопросу.
+   */
+  onPendingAction(action: string, handler: PendingHandler, reprompt?: PendingReprompt) {
+    this.pending.set(action, { handler, reprompt });
   }
 
   async setPending(userId: number, action: string | null, payload: unknown = null) {
@@ -118,9 +121,15 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
   private async dispatchPending(ctx: BotContext, next: () => Promise<void>) {
     const user = ctx.dbUser;
     const text = ctx.message?.text;
-    if (user?.pendingAction && text && !text.startsWith('/')) {
-      const handler = this.pending.get(user.pendingAction);
-      if (handler) return handler(ctx, user, user.pendingPayload);
+    const entry = user?.pendingAction ? this.pending.get(user.pendingAction) : undefined;
+    if (!user || !entry) return next();
+    if (text && !text.startsWith('/')) return entry.handler(ctx, user, user.pendingPayload);
+    if (entry.reprompt) {
+      if (ctx.callbackQuery) {
+        await ctx.answerCallbackQuery({ text: 'Avval so\'ralgan ma\'lumotni yozing', show_alert: true }).catch(() => undefined);
+      }
+      await entry.reprompt(ctx, user, user.pendingPayload);
+      return;
     }
     return next();
   }
