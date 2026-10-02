@@ -44,7 +44,7 @@ export function DonateSheet({ open, onOpenChange, fund }: { open: boolean; onOpe
         {donate.isSuccess ? (
           <div className="flex flex-col items-center py-8 text-center">
             <CheckCircle2 className="mb-3 size-14 text-primary" />
-            <p className="text-lg font-extrabold">Jazakallohu xoyron!</p>
+            <p className="text-lg font-semibold">Jazakallohu xoyron!</p>
             <p className="mt-1 text-sm text-muted-foreground">Admin chekni tasdiqlagach, summa jamg'armaga qo'shiladi.</p>
             <Button className="mt-6 w-full" onClick={() => onOpenChange(false)}>
               Yopish
@@ -78,7 +78,7 @@ export function DonateSheet({ open, onOpenChange, fund }: { open: boolean; onOpe
               </div>
               <Input type="number" inputMode="numeric" min={10} value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
             </Field>
-            <MbankCard number={fund.hayriyaMbankNumber} name={fund.recipientName} amount={amount} note="Hayriya" />
+            <MbankCard number={fund.hayriyaMbankNumber} amount={amount} />
             <ReceiptInput file={file} onChange={setFile} />
             {donate.error && <ErrorBox error={donate.error} />}
             <Button size="lg" variant="gold" className="w-full" disabled={!file || amount < 10} loading={donate.isPending} onClick={() => donate.mutate()}>

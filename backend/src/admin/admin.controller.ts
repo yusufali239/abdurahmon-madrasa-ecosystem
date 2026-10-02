@@ -21,7 +21,7 @@ import { AdminGuard } from '../auth/guards';
 import { dateOnly } from '../common/time.util';
 import { ContentService } from '../content/content.service';
 import { FundService } from '../fund/fund.service';
-import { AdvanceLessonDto, CreateLessonDto, UpdateLessonDto } from '../lessons/lessons.dto';
+import { CreateLessonDto, FinishSessionDto, StartSessionDto, UpdateLessonDto } from '../lessons/lessons.dto';
 import { LESSON_INCLUDE, LessonsService } from '../lessons/lessons.service';
 import { SessionsService } from '../lessons/sessions.service';
 import { NewsService } from '../news/news.service';
@@ -198,7 +198,7 @@ export class AdminController {
     const rows = await this.prisma.lesson.findMany({
       where: { teacherId: teacherId ? Number(teacherId) : undefined, subjectId: subjectId ? Number(subjectId) : undefined },
       include: LESSON_INCLUDE,
-      orderBy: [{ isActive: 'desc' }, { weekDay: 'asc' }],
+      orderBy: [{ isActive: 'desc' }, { id: 'asc' }],
     });
     return rows.map((l) => this.lessons.decorate(l));
   }
@@ -233,9 +233,14 @@ export class AdminController {
     return this.lessons.update(id, dto);
   }
 
-  @Post('lessons/:id/advance')
-  advance(@Param('id', ParseIntPipe) id: number, @Body() dto: AdvanceLessonDto) {
-    return this.lessons.advance(id, dto);
+  @Post('sessions/:id/start')
+  startSession(@Param('id', ParseIntPipe) id: number, @Body() dto: StartSessionDto) {
+    return this.sessions.start(id, dto);
+  }
+
+  @Post('sessions/:id/finish')
+  finishSession(@Param('id', ParseIntPipe) id: number, @Body() dto: FinishSessionDto) {
+    return this.sessions.finish(id, dto);
   }
 
   @Post('lessons/:id/contents')

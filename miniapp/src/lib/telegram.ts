@@ -1,4 +1,5 @@
 import WebApp from '@twa-dev/sdk';
+import { applyTheme, watchSystemTheme } from '@shared/lib/theme';
 
 /** Обёртка над Telegram WebApp SDK с безопасными fallback вне Telegram */
 export const tg = WebApp;
@@ -9,13 +10,12 @@ export function initTelegram() {
   try {
     WebApp.ready();
     WebApp.expand();
-    if (WebApp.colorScheme === 'dark') document.documentElement.classList.add('dark');
-    const bg = WebApp.colorScheme === 'dark' ? '#0e1715' : '#FAF7F2';
-    WebApp.setHeaderColor?.(bg as `#${string}`);
-    WebApp.setBackgroundColor?.(bg as `#${string}`);
   } catch {
     /* вне Telegram */
   }
+  // Тема: выбор пользователя (Avto / Yorug' / Qorong'i), по умолчанию — как в Telegram
+  applyTheme();
+  watchSystemTheme();
 }
 
 export function haptic(type: 'success' | 'error' | 'warning' | 'light' = 'light') {

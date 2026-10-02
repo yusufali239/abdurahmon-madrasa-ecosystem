@@ -40,27 +40,29 @@ export interface Lesson {
   subjectId: number;
   locationId: number | null;
   isContinuous: boolean;
-  weekDay: number;
+  weekDays: number[];
   startTime: string;
   endTime: string;
   startClock: string | null;
   bookTitle: string;
   bookTotalPages: number;
-  currentPageFrom: number;
-  currentPageTo: number;
-  topic: string;
-  nextTopic: string | null;
+  isNewBook: boolean;
+  /** Страница, с которой начнётся следующий урок (null — спросят при старте) */
+  currentPage: number | null;
+  topic: string | null;
   priceTier: number;
   customPrice: number | null;
-  paymentType: PaymentType;
+  paymentType?: PaymentType;
   isActive: boolean;
   subject: Subject;
   location: Location | null;
-  teacher: { id: number; mbankNumber: string; telegramPhone: string; user: { id: number; fullName: string | null; username?: string | null } };
+  teacher: { id: number; user: { id: number; fullName: string | null; username?: string | null } };
   _count?: { enrollments: number; contents: number };
+  /** Цена за один день урока */
   price: number;
   approxStart: string | null;
-  progressPercent: number;
+  pagesDone: number | null;
+  progressPercent: number | null;
   enrolled?: boolean;
 }
 
@@ -79,9 +81,10 @@ export interface ContentItem {
 export interface Payment {
   id: number;
   amount: number;
-  paymentType: PaymentType;
+  paymentType?: PaymentType;
   status: 'PENDING' | 'CONFIRMED' | 'REJECTED';
   receipt_url: string | null;
+  /** День урока "YYYY-MM-DD" */
   period: string | null;
   createdAt: string;
   lessonId: number | null;
@@ -90,16 +93,27 @@ export interface Payment {
   lesson?: { subject: Subject } | null;
 }
 
+export interface SessionInfo {
+  id: number;
+  date: string;
+  status: 'SCHEDULED' | 'CONFIRMED' | 'STARTED' | 'CANCELLED' | 'DONE';
+  pageFrom: number | null;
+  pageTo: number | null;
+  topic: string | null;
+  cancelReason: string | null;
+}
+
 export interface LessonDetail extends Lesson {
   hasAccess: boolean;
   enrolled: boolean;
-  paidThisPeriod: boolean;
-  pendingPayment: Payment | null;
-  period: string;
+  nextDate: string | null;
+  nextDates: Array<{ date: string; weekDay: number; label: string }>;
+  paidNext: boolean;
+  pendingNext: Payment | null;
   payments: Payment[];
-  attendances: Array<{ id: number; status: string; session: { date: string; pageFrom: number; pageTo: number; topic: string } }>;
+  attendances: Array<{ id: number; status: string; session: { date: string; pageFrom: number | null; pageTo: number | null; topic: string | null } }>;
   grades: Array<{ id: number; score: number; comment: string | null; createdAt: string }>;
-  sessions: Array<{ id: number; date: string; status: string; pageFrom: number; pageTo: number; topic: string; cancelReason: string | null }>;
+  sessions: SessionInfo[];
   contents: ContentItem[];
 }
 

@@ -16,7 +16,7 @@ const OPTIONS: Array<{ v: Status; label: string; cls: string }> = [
 ];
 
 interface AttendanceResp {
-  session: { id: number; date: string; pageFrom: number; pageTo: number; topic: string; status: string; lesson: { subject: { name: string } } };
+  session: { id: number; date: string; pageFrom: number | null; pageTo: number | null; topic: string | null; status: string; lesson: { subject: { name: string } } };
   items: Array<{ student: { id: number; fullName: string }; status: Status | null }>;
 }
 
@@ -46,20 +46,20 @@ export function AttendanceSheet({ sessionId, onOpenChange }: { sessionId: number
       <DialogContent
         side="bottom"
         title="Davomat"
-        description={s ? `${s.lesson.subject.name} · ${dateUz(s.date)} · ${s.pageFrom}–${s.pageTo}-bet «${s.topic}»` : ''}
+        description={s ? `${s.lesson.subject.name} · ${dateUz(s.date)}` : ''}
       >
         {q.error && <ErrorBox error={q.error} />}
         {q.data && !q.data.items.length && <p className="py-6 text-center text-sm text-muted-foreground">Bu darsga hali talabalar yozilmagan.</p>}
         <div className="space-y-2.5">
           {q.data?.items.map((i) => (
-            <div key={i.student.id} className="rounded-2xl border bg-card p-3">
-              <p className="mb-2 text-sm font-bold">{i.student.fullName}</p>
+            <div key={i.student.id} className="rounded-2xl border bg-card p-4">
+              <p className="mb-3 text-sm font-medium">{i.student.fullName}</p>
               <div className="grid grid-cols-4 gap-1.5">
                 {OPTIONS.map((o) => (
                   <button
                     key={o.v}
                     onClick={() => (haptic('light'), setMarks({ ...marks, [i.student.id]: o.v }))}
-                    className={cn('rounded-lg py-1.5 text-[11px] font-bold transition', marks[i.student.id] === o.v ? o.cls : 'bg-muted text-muted-foreground')}
+                    className={cn('rounded-lg py-2 text-xs font-medium transition', marks[i.student.id] === o.v ? o.cls : 'bg-muted text-muted-foreground')}
                   >
                     {o.label}
                   </button>
@@ -71,7 +71,7 @@ export function AttendanceSheet({ sessionId, onOpenChange }: { sessionId: number
         {save.error && <ErrorBox error={save.error} />}
         {!!q.data?.items.length && (
           <Button size="lg" className="mt-4 w-full" loading={save.isPending} onClick={() => save.mutate()}>
-            Saqlash va yakunlash
+            Saqlash
           </Button>
         )}
       </DialogContent>

@@ -6,7 +6,7 @@ import { esc } from '../bot/html';
 import { MenuService } from '../bot/menu.service';
 import { MessengerService } from '../bot/messenger.service';
 import { effectivePrice } from '../common/pricing';
-import { currentPeriod, formatSom } from '../common/time.util';
+import { dateKey, formatSom, nextLessonDates, zonedParts } from '../common/time.util';
 import { AppConfig } from '../config/app-config.service';
 import { FundService } from '../fund/fund.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -40,16 +40,20 @@ export class PaymentsService {
     private readonly uploads: UploadsService,
   ) {}
 
-  /** Реквизиты для оплаты урока: сумма, номер MBank, период */
+  /**
+   * Реквизиты для оплаты ОДНОГО дня урока.
+   * Ученику не показывается, куда идут деньги (учителю или в фонд) — только номер и сумма.
+   */
   async info(user: User, lessonId: number) {
     const lesson = await this.prisma.lesson.findUnique({
       where: { id: lessonId },
       include: { teacher: { include: { user: { select: { fullName: true } } } }, subject: true },
     });
     if (!lesson) throw new NotFoundException('Dars topilmadi');
-    const period = currentPeriod(this.cfg.timezone);
-    const existing = await this.prisma.payment.findFirst({
-      where: { studentId: user.id, lessonId, period, status: { in: ['PENDING', 'CONFIRMED'] } },
+    const dates = nextLessonDates(lesson.weekDays, 4, this.cfg.timezone);
+    const payments = await this.prisma.payment.findMany({
+      where: { studentId: user.id, lessonId, period: { in: dates.map((d) => d.date) }, status: { in: ['PENDING', 'CONFIRMED'] } },
+      select: { period: true, status: true },
     });
     const isHayriya = lesson.paymentType === 'HAYRIYA';
     return {
@@ -57,22 +61,19 @@ export class PaymentsService {
       subject: lesson.subject.name,
       teacherName: lesson.teacher.user.fullName,
       amount: effectivePrice(lesson),
-      priceTier: lesson.priceTier,
-      customPrice: lesson.customPrice,
-      paymentType: lesson.paymentType,
-      period,
-      recipient: isHayriya
-        ? { name: this.cfg.hayriyaRecipientName, mbankNumber: this.cfg.hayriyaMbankNumber }
-        : { name: lesson.teacher.user.fullName, mbankNumber: lesson.teacher.mbankNumber },
-      existing,
+      dates: dates.map((d) => ({ ...d, status: payments.find((p) => p.period === d.date)?.status ?? null })),
+      mbankNumber: isHayriya ? this.cfg.hayriyaMbankNumber : lesson.teacher.mbankNumber,
+      mbankLink: (isHayriya ? this.cfg.hayriyaMbankLink : lesson.teacher.mbankLink) || null,
     };
   }
 
-  async createForLesson(user: User, lessonId: number, receipt?: Express.Multer.File, note?: string) {
+  async createForLesson(user: User, lessonId: number, date: string | undefined, receipt?: Express.Multer.File, note?: string) {
     const info = await this.info(user, lessonId);
     if (info.amount <= 0) throw new BadRequestException('Bu dars bepul');
-    if (info.existing) {
-      throw new BadRequestException(info.existing.status === 'CONFIRMED' ? 'Bu oy uchun to\'lov tasdiqlangan' : 'To\'lovingiz tekshirilmoqda');
+    const day = info.dates.find((d) => d.date === date) ?? (date ? null : info.dates[0]);
+    if (!day) throw new BadRequestException('Dars kunini tanlang');
+    if (day.status) {
+      throw new BadRequestException(day.status === 'CONFIRMED' ? 'Bu kun uchun to\'lov tasdiqlangan' : 'Bu kun uchun to\'lovingiz tekshirilmoqda');
     }
     const lesson = await this.prisma.lesson.findUniqueOrThrow({ where: { id: lessonId } });
     // Оплата подразумевает запись на урок
@@ -89,7 +90,7 @@ export class PaymentsService {
       amount: info.amount,
       paymentType: lesson.paymentType,
       receiptUrl,
-      period: info.period,
+      period: day.date,
       note,
     });
   }
@@ -107,7 +108,7 @@ export class PaymentsService {
       amount,
       paymentType: 'HAYRIYA',
       receiptUrl,
-      period: currentPeriod(this.cfg.timezone),
+      period: dateKey(zonedParts(new Date(), this.cfg.timezone)),
       note,
     });
   }
@@ -152,14 +153,29 @@ export class PaymentsService {
     );
   }
 
+  /** MBANK_SELF — проверяет сам учитель; HAYRIYA — админы */
   private async notifyNew(p: Prisma.PaymentGetPayload<{ include: typeof PAYMENT_INCLUDE }>) {
     const kb = new InlineKeyboard().text('✅ Tasdiqlash', `pay:ok:${p.id}`).text('❌ Rad etish', `pay:no:${p.id}`);
     const receipt = this.uploads.absolute(p.receipt_url);
     const text = `🧾 <b>Yangi to'lov #${p.id}</b>\n\n${this.paymentText(p)}${receipt ? `\n📎 Chek: ${esc(receipt)}` : '\n📎 Chek yuklanmagan'}`;
-    await this.admins.notify(text, kb);
     if (p.paymentType === 'MBANK_SELF') {
       await this.messenger.send(p.teacher.user.telegramId, `${text}\n\nMBank hisobingizga tushganini tekshirib, tasdiqlang.`, { reply_markup: kb });
+    } else {
+      await this.admins.notify(text, kb);
     }
+  }
+
+  /** Текст для ученика — без указания, куда ушли деньги */
+  private studentText(p: Prisma.PaymentGetPayload<{ include: typeof PAYMENT_INCLUDE }>) {
+    return (
+      (p.lesson ? `📘 ${esc(p.lesson.subject.name)} — ${esc(p.teacher.user.fullName)}\n` : '') +
+      `💰 <b>${formatSom(p.amount)}</b>` +
+      (p.period ? ` · ${p.period}` : '')
+    );
+  }
+
+  async typeOf(id: number) {
+    return (await this.load(id)).paymentType;
   }
 
   private async load(id: number) {
@@ -169,13 +185,16 @@ export class PaymentsService {
   }
 
   private async assertActor(p: Awaited<ReturnType<PaymentsService['load']>>, actor: PaymentActor) {
-    if (actor.kind === 'admin') {
-      if (!this.cfg.isAdmin(actor.telegramId)) throw new ForbiddenException();
+    if (p.paymentType === 'MBANK_SELF') {
+      // Деньги ушли учителю — проверяет только он сам
+      if (actor.kind !== 'teacher' || p.teacher.userId !== actor.userId) {
+        throw new ForbiddenException('Bu to\'lovni ustozning o\'zi tekshiradi');
+      }
       return;
     }
-    // Учитель подтверждает только прямые MBank-платежи себе
-    if (p.paymentType !== 'MBANK_SELF' || p.teacher.userId !== actor.userId) {
-      throw new ForbiddenException('Bu to\'lovni faqat admin tasdiqlaydi');
+    // Hayriya — только админ
+    if (actor.kind !== 'admin' || !this.cfg.isAdmin(actor.telegramId)) {
+      throw new ForbiddenException('Bu to\'lovni admin tekshiradi');
     }
   }
 
@@ -207,8 +226,7 @@ export class PaymentsService {
     kb.text('⬅️ Bosh menyu', 'menu:home');
     await this.messenger.send(
       p.student.telegramId,
-      `✅ <b>To'lovingiz tasdiqlandi!</b>\n\n${this.paymentText(p)}` +
-        (p.paymentType === 'HAYRIYA' ? '\n\n🤲 Alloh savobingizni ziyoda qilsin! Hayriya jamg\'armasiga qo\'shildi.' : '\n\nEndi barcha dars materiallari ochiq.'),
+      `✅ <b>To'lovingiz tasdiqlandi!</b>\n\n${this.studentText(p)}` + (p.lessonId ? '\n\nDars materiallari ochiq.' : '\n\n🤲 Jazakallohu xoyron!'),
       { reply_markup: kb },
     );
     return this.load(id);
@@ -222,7 +240,7 @@ export class PaymentsService {
     if (p.donation) await this.prisma.donation.update({ where: { id: p.donation.id }, data: { status: 'REJECTED' } });
     await this.messenger.send(
       p.student.telegramId,
-      `❌ <b>To'lov rad etildi</b>\n\n${this.paymentText(p)}${reason ? `\nSabab: ${esc(reason)}` : ''}\n\nChekni tekshirib, qayta yuboring.`,
+      `❌ <b>To'lov rad etildi</b>\n\n${this.studentText(p)}${reason ? `\nSabab: ${esc(reason)}` : ''}\n\nChekni tekshirib, qayta yuboring.`,
       { reply_markup: new InlineKeyboard().text('⬅️ Bosh menyu', 'menu:home') },
     );
     return this.load(id);
@@ -238,8 +256,10 @@ export class PaymentsService {
     return rows.map((r) => ({ ...r, receipt_url: this.uploads.absolute(r.receipt_url) }));
   }
 
-  mine(user: User) {
-    return this.list({ studentId: user.id });
+  /** Для ученика — без типа оплаты и данных получателя */
+  async mine(user: User) {
+    const rows = await this.list({ studentId: user.id });
+    return rows.map(({ paymentType: _t, donation: _d, teacher, ...p }) => ({ ...p, teacher: { user: { fullName: teacher.user.fullName } } }));
   }
 
   async forTeacher(userId: number) {

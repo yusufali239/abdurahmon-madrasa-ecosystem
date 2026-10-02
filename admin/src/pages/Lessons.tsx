@@ -5,9 +5,9 @@ import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Dialog, DialogContent } from '@shared/ui/dialog';
 import { Field, Select } from '@shared/ui/input';
-import { EMPTY_LESSON, LessonForm, lessonPayload, lessonToForm, type LessonFormValue } from '@shared/ui/lesson-form';
+import { EMPTY_LESSON, LessonForm, lessonFormMissing, lessonPayload, lessonToForm, type LessonFormValue } from '@shared/ui/lesson-form';
 import { Progress } from '@shared/ui/progress';
-import { dateUz, som, WEEKDAYS } from '@shared/lib/utils';
+import { dateUz, daysText, pageTopic, som } from '@shared/lib/utils';
 import { api } from '@/lib/api';
 import { ErrorBox, PageTitle } from '@/components/AdminLayout';
 
@@ -20,6 +20,7 @@ function LessonDialog({ lesson, open, onOpenChange }: { lesson: any | null; open
   const detail = useQuery({ queryKey: ['admin-lesson', lesson?.id], queryFn: () => api<any>(`/admin/lessons/${lesson.id}`), enabled: !!lesson?.id && open });
   const [teacherId, setTeacherId] = useState<string>('');
   const [form, setForm] = useState<LessonFormValue>(EMPTY_LESSON);
+  const [formError, setFormError] = useState<string | null>(null);
   useEffect(() => {
     if (lesson) {
       setForm(lessonToForm(lesson));
@@ -58,11 +59,27 @@ function LessonDialog({ lesson, open, onOpenChange }: { lesson: any | null; open
                 </Select>
               </Field>
             )}
-            <LessonForm value={form} onChange={setForm} subjects={subjects.data ?? []} locations={(lesson ? lesson.teacher.locations : teacher?.locations) ?? d?.teacher?.locations ?? []} />
-            <div className="mt-3">
-              <ErrorBox error={save.error} />
+            <LessonForm
+              value={form}
+              onChange={setForm}
+              subjects={subjects.data ?? []}
+              locations={(lesson ? lesson.teacher.locations : teacher?.locations) ?? d?.teacher?.locations ?? []}
+              isEdit={!!lesson}
+            />
+            <div className="mt-4">
+              <ErrorBox error={formError ? new Error(formError) : save.error} />
             </div>
-            <Button size="lg" className="mt-4 w-full" loading={save.isPending} disabled={!lesson && !teacherId} onClick={() => save.mutate()}>
+            <Button
+              size="lg"
+              className="mt-4 w-full"
+              loading={save.isPending}
+              disabled={!lesson && !teacherId}
+              onClick={() => {
+                const missing = lessonFormMissing(form);
+                setFormError(missing);
+                if (!missing) save.mutate();
+              }}
+            >
               Saqlash
             </Button>
           </div>
@@ -81,7 +98,8 @@ function LessonDialog({ lesson, open, onOpenChange }: { lesson: any | null; open
                 {d.sessions.map((s: any) => (
                   <div key={s.id} className="mb-2 rounded-xl bg-muted/60 p-2.5">
                     <p className="font-semibold">
-                      {dateUz(s.date)} · {s.status} · {s.pageFrom}–{s.pageTo}
+                      {dateUz(s.date)} · {s.status}
+                      {s.pageFrom ? ` · ${s.pageFrom}${s.pageTo ? `–${s.pageTo}` : ''}-bet` : ''}
                     </p>
                     {s.cancelReason && <p className="text-xs text-destructive">Sabab: {s.cancelReason}</p>}
                     <p className="text-xs">{s.attendances.map((a: any) => `${ATT[a.status]} ${a.student.fullName}`).join(', ')}</p>
@@ -137,23 +155,21 @@ export default function LessonsPage() {
               </Button>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              {WEEKDAYS[l.weekDay]}, {l.startTime} {l.approxStart && !/\d:\d/.test(l.startTime) && `(~${l.approxStart})`} — {l.endTime}
+              {daysText(l.weekDays)} · {l.startTime} {l.approxStart && !/\d:\d/.test(l.startTime) && `(~${l.approxStart})`} — {l.endTime}
             </p>
-            <p className="mt-3 text-sm font-bold">
-              {l.currentPageFrom}–{l.currentPageTo}-bet · {l.topic}
-            </p>
+            <p className="mt-3 text-sm font-semibold">{pageTopic(l.currentPage, l.topic) || 'Bet birinchi darsda belgilanadi'}</p>
             <p className="text-xs text-muted-foreground">
-              «{l.bookTitle}» · {l.bookTotalPages} bet
+              «{l.bookTitle}» · {l.bookTotalPages} bet{l.isNewBook ? ' · yangi kitob' : ''}
             </p>
-            <Progress className="mt-2" value={l.progressPercent} />
+            <Progress className="mt-2" value={l.progressPercent ?? 0} />
             <div className="mt-3 flex flex-wrap gap-1.5">
               {l.isContinuous && (
                 <Badge>
                   <InfinityIcon /> Davomiy
                 </Badge>
               )}
-              <Badge variant="gold">{l.price ? `${som(l.price)}${l.customPrice ? ' · Shaxsiy' : ''}` : 'Bepul'}</Badge>
-              <Badge variant="outline">{l.paymentType === 'HAYRIYA' ? <><HandHeart /> Hayriya</> : <><Wallet /> MBank</>}</Badge>
+              <Badge variant="gold">{l.price ? `${som(l.price)} / dars` : 'Bepul'}</Badge>
+              <Badge variant="outline">{l.paymentType === 'HAYRIYA' ? <><HandHeart /> Hayriyaga</> : <><Wallet /> Ustozga</>}</Badge>
               <Badge variant="muted">{l._count.enrollments} talaba</Badge>
               {!l.isActive && <Badge variant="red">Faol emas</Badge>}
             </div>

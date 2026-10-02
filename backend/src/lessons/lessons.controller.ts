@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Q
 import type { User } from '@prisma/client';
 import { CurrentUser, Roles, TelegramGuard } from '../auth/guards';
 import { TeachersService } from '../teachers/teachers.service';
-import { AdvanceLessonDto, CreateGradeDto, CreateLessonDto, SetAttendanceDto, UpdateLessonDto } from './lessons.dto';
+import { CreateGradeDto, CreateLessonDto, FinishSessionDto, SetAttendanceDto, StartSessionDto, UpdateLessonDto } from './lessons.dto';
 import { LessonsService } from './lessons.service';
 import { SessionsService } from './sessions.service';
 
@@ -64,13 +64,6 @@ export class LessonsController {
     return this.lessons.remove(id, t.id);
   }
 
-  @Post('lessons/:id/advance')
-  @Roles('TEACHER')
-  async advance(@CurrentUser() user: User, @Param('id', ParseIntPipe) id: number, @Body() dto: AdvanceLessonDto) {
-    const t = await this.teachers.requireTeacher(user.id);
-    return this.lessons.advance(id, dto, t.id);
-  }
-
   @Post('lessons/:id/enroll')
   enroll(@CurrentUser() user: User, @Param('id', ParseIntPipe) id: number) {
     return this.lessons.enroll(user, id);
@@ -122,8 +115,22 @@ export class LessonsController {
   @Roles('TEACHER')
   async setAttendance(@CurrentUser() user: User, @Param('id', ParseIntPipe) id: number, @Body() dto: SetAttendanceDto) {
     const res = await this.sessions.setAttendance(id, dto.items, user.id);
-    if (dto.finish) await this.sessions.finish(id, user.id);
+    if (dto.finish) await this.sessions.finalizeAttendance(id, user.id);
     return res;
+  }
+
+  /** ▶ Начать урок (страница — если неизвестна) */
+  @Post('sessions/:id/start')
+  @Roles('TEACHER')
+  start(@CurrentUser() user: User, @Param('id', ParseIntPipe) id: number, @Body() dto: StartSessionDto) {
+    return this.sessions.start(id, dto, user.id);
+  }
+
+  /** ⏹ Закончить урок: до какой страницы + следующая тема */
+  @Post('sessions/:id/finish')
+  @Roles('TEACHER')
+  finish(@CurrentUser() user: User, @Param('id', ParseIntPipe) id: number, @Body() dto: FinishSessionDto) {
+    return this.sessions.finish(id, dto, user.id);
   }
 
   @Post('sessions/:id/confirm')

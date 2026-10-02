@@ -1,4 +1,4 @@
-import { HandHeart, Wallet } from 'lucide-react';
+import { BookOpen, BookOpenCheck, HandHeart, Wallet } from 'lucide-react';
 import { cn, WEEKDAYS_SHORT } from '../lib/utils';
 import { Field, Input, Select } from './input';
 import { Switch } from './switch';
@@ -6,17 +6,14 @@ import { Switch } from './switch';
 export interface LessonFormValue {
   subjectId: number | '';
   locationId: number | '' | null;
-  isContinuous: boolean;
-  weekDay: number;
+  weekDays: number[];
   startTime: string;
   startClock: string;
   endTime: string;
   bookTitle: string;
   bookTotalPages: number | '';
-  currentPageFrom: number | '';
-  currentPageTo: number | '';
-  topic: string;
-  nextTopic: string;
+  /** true — новая книга (с 1-й стр.), false — продолжающаяся (страницу спросим при старте урока) */
+  isNewBook: boolean;
   priceTier: number;
   customPrice: number | '' | null;
   paymentType: 'MBANK_SELF' | 'HAYRIYA';
@@ -26,17 +23,13 @@ export interface LessonFormValue {
 export const EMPTY_LESSON: LessonFormValue = {
   subjectId: '',
   locationId: '',
-  isContinuous: true,
-  weekDay: 4,
+  weekDays: [],
   startTime: 'Shomdan keyin',
   startClock: '',
   endTime: '22:00 gacha',
   bookTitle: '',
-  bookTotalPages: 200,
-  currentPageFrom: 1,
-  currentPageTo: 10,
-  topic: '',
-  nextTopic: '',
+  bookTotalPages: '',
+  isNewBook: true,
   priceTier: 100,
   customPrice: null,
   paymentType: 'MBANK_SELF',
@@ -46,22 +39,18 @@ export const EMPTY_LESSON: LessonFormValue = {
 const START_PRESETS = ['Bomdoddan keyin', 'Peshindan keyin', 'Asrdan keyin', 'Shomdan keyin', 'Xuftondan keyin'];
 const TIERS = [0, 50, 100, 200];
 
-/** Приводит значение формы к телу запроса API */
+/** Значение формы -> тело запроса API */
 export function lessonPayload(v: LessonFormValue) {
   return {
     subjectId: Number(v.subjectId),
     locationId: v.locationId ? Number(v.locationId) : null,
-    isContinuous: v.isContinuous,
-    weekDay: v.weekDay,
+    weekDays: v.weekDays,
     startTime: v.startTime.trim(),
     startClock: v.startClock || null,
     endTime: v.endTime.trim(),
     bookTitle: v.bookTitle.trim(),
     bookTotalPages: Number(v.bookTotalPages),
-    currentPageFrom: Number(v.currentPageFrom),
-    currentPageTo: Number(v.currentPageTo),
-    topic: v.topic.trim(),
-    nextTopic: v.nextTopic.trim() || null,
+    isNewBook: v.isNewBook,
     priceTier: v.priceTier,
     customPrice: v.customPrice ? Number(v.customPrice) : null,
     paymentType: v.paymentType,
@@ -73,22 +62,62 @@ export function lessonToForm(l: any): LessonFormValue {
   return {
     subjectId: l.subjectId,
     locationId: l.locationId ?? '',
-    isContinuous: l.isContinuous,
-    weekDay: l.weekDay,
+    weekDays: l.weekDays ?? [],
     startTime: l.startTime,
     startClock: l.startClock ?? '',
     endTime: l.endTime,
     bookTitle: l.bookTitle,
     bookTotalPages: l.bookTotalPages,
-    currentPageFrom: l.currentPageFrom,
-    currentPageTo: l.currentPageTo,
-    topic: l.topic,
-    nextTopic: l.nextTopic ?? '',
+    isNewBook: l.isNewBook,
     priceTier: l.priceTier,
     customPrice: l.customPrice ?? null,
     paymentType: l.paymentType,
     isActive: l.isActive,
   };
+}
+
+/** Простая проверка перед отправкой: что ещё не заполнено */
+export function lessonFormMissing(v: LessonFormValue): string | null {
+  if (!v.subjectId) return 'Fanni tanlang';
+  if (!v.weekDays.length) return 'Kamida bitta kunni tanlang';
+  if (!v.bookTitle.trim()) return 'Kitob nomini yozing';
+  if (!v.bookTotalPages || Number(v.bookTotalPages) < 1) return 'Kitobdagi betlar sonini yozing';
+  return null;
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-4">
+      <h3 className="text-sm font-bold text-foreground">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function Choice({
+  active,
+  onClick,
+  icon: Icon,
+  title,
+  text,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Wallet;
+  title: string;
+  text: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn('rounded-2xl border p-4 text-left transition', active ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'bg-card hover:bg-muted/50')}
+    >
+      <Icon className={cn('mb-2 size-5', active ? 'text-primary' : 'text-muted-foreground')} />
+      <p className="text-sm font-semibold">{title}</p>
+      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{text}</p>
+    </button>
+  );
 }
 
 /** Форма урока (Mini App учителя и админ-панель) */
@@ -97,19 +126,23 @@ export function LessonForm({
   onChange,
   subjects,
   locations,
+  isEdit = false,
 }: {
   value: LessonFormValue;
   onChange: (v: LessonFormValue) => void;
   subjects: Array<{ id: number; name: string }>;
   locations: Array<{ id: number; title: string }>;
+  isEdit?: boolean;
 }) {
   const set = <K extends keyof LessonFormValue>(k: K, v: LessonFormValue[K]) => onChange({ ...value, [k]: v });
   const num = (s: string) => (s === '' ? '' : Number(s));
-  const personal = value.customPrice !== null && value.customPrice !== '' ? true : false;
+  const personal = value.customPrice !== null && value.customPrice !== '';
+  const toggleDay = (d: number) =>
+    set('weekDays', value.weekDays.includes(d) ? value.weekDays.filter((x) => x !== d) : [...value.weekDays, d].sort());
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-8">
+      <Section title="Dars">
         <Field label="Fan">
           <Select value={value.subjectId} onChange={(e) => set('subjectId', num(e.target.value) as number)}>
             <option value="">Tanlang…</option>
@@ -120,85 +153,90 @@ export function LessonForm({
             ))}
           </Select>
         </Field>
-        <Field label="Manzil">
-          <Select value={value.locationId ?? ''} onChange={(e) => set('locationId', num(e.target.value) as number)}>
-            <option value="">— Ko'rsatilmagan</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.title}
-              </option>
+        <Field label="Kunlar" hint="Bir nechta kunni tanlash mumkin">
+          <div className="grid grid-cols-7 gap-1.5">
+            {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+              <button
+                type="button"
+                key={d}
+                onClick={() => toggleDay(d)}
+                aria-pressed={value.weekDays.includes(d)}
+                className={cn(
+                  'h-11 rounded-xl border text-sm font-semibold transition',
+                  value.weekDays.includes(d) ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground',
+                )}
+              >
+                {WEEKDAYS_SHORT[d]}
+              </button>
             ))}
-          </Select>
+          </div>
         </Field>
-      </div>
-
-      <Field label="Hafta kuni">
-        <div className="grid grid-cols-7 gap-1.5">
-          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-            <button
-              type="button"
-              key={d}
-              onClick={() => set('weekDay', d)}
-              className={cn('rounded-xl border py-2 text-xs font-bold', value.weekDay === d ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground')}
-            >
-              {WEEKDAYS_SHORT[d]}
-            </button>
-          ))}
+        <Field label="Boshlanishi">
+          <Input value={value.startTime} onChange={(e) => set('startTime', e.target.value)} placeholder="Shomdan keyin yoki 18:30" />
+          <div className="no-scrollbar -mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1">
+            {START_PRESETS.map((p) => (
+              <button
+                type="button"
+                key={p}
+                onClick={() => set('startTime', p)}
+                className={cn(
+                  'shrink-0 rounded-full border px-3 py-1 text-xs',
+                  value.startTime === p ? 'border-primary text-primary' : 'text-muted-foreground',
+                )}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Tugashi">
+            <Input value={value.endTime} onChange={(e) => set('endTime', e.target.value)} placeholder="22:00 gacha" />
+          </Field>
+          <Field label="Aniq vaqt">
+            <Input type="time" value={value.startClock} onChange={(e) => set('startClock', e.target.value)} />
+          </Field>
         </div>
-      </Field>
+        {locations.length > 0 && (
+          <Field label="Joy">
+            <Select value={value.locationId ?? ''} onChange={(e) => set('locationId', num(e.target.value) as number)}>
+              <option value="">Ko'rsatilmagan</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.title}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+      </Section>
 
-      <Field label="Boshlanish vaqti" hint="Namozga bog'langan vaqt Osh namoz jadvalidan avtomatik hisoblanadi">
-        <Input value={value.startTime} onChange={(e) => set('startTime', e.target.value)} placeholder="Shomdan keyin yoki 18:30" />
-        <div className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto">
-          {START_PRESETS.map((p) => (
-            <button
-              type="button"
-              key={p}
-              onClick={() => set('startTime', p)}
-              className={cn('shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold', value.startTime === p ? 'border-gold bg-gold-soft' : 'text-muted-foreground')}
-            >
-              {p}
-            </button>
-          ))}
+      <Section title="Kitob">
+        <div className="grid grid-cols-2 gap-3">
+          <Choice
+            active={value.isNewBook}
+            onClick={() => set('isNewBook', true)}
+            icon={BookOpen}
+            title="Yangi kitob"
+            text="1-betdan boshlanadi"
+          />
+          <Choice
+            active={!value.isNewBook}
+            onClick={() => set('isNewBook', false)}
+            icon={BookOpenCheck}
+            title="Davom etayotgan"
+            text="Darsni boshlaganda betni so'raymiz"
+          />
         </div>
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Aniq vaqt (ixtiyoriy)">
-          <Input type="time" value={value.startClock} onChange={(e) => set('startClock', e.target.value)} />
+        <Field label="Kitob nomi">
+          <Input value={value.bookTitle} onChange={(e) => set('bookTitle', e.target.value)} placeholder="Muxtasar al-Quduriy" />
         </Field>
-        <Field label="Tugash">
-          <Input value={value.endTime} onChange={(e) => set('endTime', e.target.value)} placeholder="22:00 gacha" />
+        <Field label="Jami betlar">
+          <Input type="number" inputMode="numeric" value={value.bookTotalPages} onChange={(e) => set('bookTotalPages', num(e.target.value))} placeholder="200" />
         </Field>
-      </div>
+      </Section>
 
-      <div className="rounded-2xl border bg-muted/40 p-3">
-        <Switch checked={value.isContinuous} onChange={(v) => set('isContinuous', v)} label="Davomiy dars (har hafta, 08:00 da tasdiq so'raladi)" />
-      </div>
-
-      <Field label="Kitob">
-        <Input value={value.bookTitle} onChange={(e) => set('bookTitle', e.target.value)} placeholder="Muxtasar al-Quduriy" />
-      </Field>
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Jami bet">
-          <Input type="number" inputMode="numeric" value={value.bookTotalPages} onChange={(e) => set('bookTotalPages', num(e.target.value))} />
-        </Field>
-        <Field label="Betdan">
-          <Input type="number" inputMode="numeric" value={value.currentPageFrom} onChange={(e) => set('currentPageFrom', num(e.target.value))} />
-        </Field>
-        <Field label="Betgacha">
-          <Input type="number" inputMode="numeric" value={value.currentPageTo} onChange={(e) => set('currentPageTo', num(e.target.value))} />
-        </Field>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Mavzu">
-          <Input value={value.topic} onChange={(e) => set('topic', e.target.value)} placeholder="Halol va harom" />
-        </Field>
-        <Field label="Keyingi mavzu">
-          <Input value={value.nextTopic} onChange={(e) => set('nextTopic', e.target.value)} placeholder="Savdo odoblari" />
-        </Field>
-      </div>
-
-      <Field label="Oylik narx (som)">
+      <Section title="Narx (bir dars uchun)">
         <div className="grid grid-cols-5 gap-1.5">
           {TIERS.map((t) => (
             <button
@@ -206,8 +244,8 @@ export function LessonForm({
               key={t}
               onClick={() => onChange({ ...value, priceTier: t, customPrice: null })}
               className={cn(
-                'rounded-xl border py-2.5 text-sm font-bold',
-                !personal && value.priceTier === t ? 'border-primary bg-primary text-primary-foreground shadow-soft' : 'bg-card text-muted-foreground',
+                'h-11 rounded-xl border text-sm font-semibold transition',
+                !personal && value.priceTier === t ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground',
               )}
             >
               {t === 0 ? 'Bepul' : t}
@@ -216,42 +254,34 @@ export function LessonForm({
           <button
             type="button"
             onClick={() => set('customPrice', value.customPrice || 150)}
-            className={cn('rounded-xl border py-2.5 text-xs font-bold', personal ? 'border-gold bg-gold text-gold-foreground shadow-gold' : 'bg-card text-muted-foreground')}
+            className={cn('h-11 rounded-xl border text-xs font-semibold', personal ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground')}
           >
-            Shaxsiy
+            Boshqa
           </button>
         </div>
         {personal && (
-          <Input className="mt-2" type="number" inputMode="numeric" value={value.customPrice ?? ''} onChange={(e) => set('customPrice', num(e.target.value))} placeholder="Shaxsiy narx" />
+          <Input type="number" inputMode="numeric" value={value.customPrice ?? ''} onChange={(e) => set('customPrice', num(e.target.value))} placeholder="Summa, som" />
         )}
-      </Field>
-
-      <Field label="To'lov turi">
-        <div className="grid grid-cols-2 gap-2">
-          {(
-            [
-              { v: 'MBANK_SELF', icon: Wallet, title: 'MBank (o\'zimga)', text: 'Talaba ustoz MBank raqamiga to\'laydi' },
-              { v: 'HAYRIYA', icon: HandHeart, title: 'Hayriya', text: 'Pul madrasa jamg\'armasiga tushadi' },
-            ] as const
-          ).map((o) => (
-            <button
-              type="button"
-              key={o.v}
-              onClick={() => set('paymentType', o.v)}
-              className={cn(
-                'rounded-2xl border p-3 text-left transition',
-                value.paymentType === o.v ? 'border-primary bg-primary/5 ring-2 ring-primary/30' : 'bg-card',
-              )}
-            >
-              <o.icon className={cn('mb-1.5 size-5', value.paymentType === o.v ? 'text-primary' : 'text-muted-foreground')} />
-              <p className="text-sm font-bold">{o.title}</p>
-              <p className="text-[11px] leading-snug text-muted-foreground">{o.text}</p>
-            </button>
-          ))}
+        <div className="grid grid-cols-2 gap-3">
+          <Choice
+            active={value.paymentType === 'MBANK_SELF'}
+            onClick={() => set('paymentType', 'MBANK_SELF')}
+            icon={Wallet}
+            title="O'zimga"
+            text="MBank raqamimga. Chekni o'zim tekshiraman"
+          />
+          <Choice
+            active={value.paymentType === 'HAYRIYA'}
+            onClick={() => set('paymentType', 'HAYRIYA')}
+            icon={HandHeart}
+            title="Hayriyaga"
+            text="Madrasa jamg'armasiga. Admin tekshiradi"
+          />
         </div>
-      </Field>
+        <p className="text-xs text-muted-foreground">Talaba faqat summa va raqamni ko'radi.</p>
+      </Section>
 
-      <Switch checked={value.isActive} onChange={(v) => set('isActive', v)} label="Dars faol" />
+      {isEdit && <Switch checked={value.isActive} onChange={(v) => set('isActive', v)} label="Dars faol" />}
     </div>
   );
 }

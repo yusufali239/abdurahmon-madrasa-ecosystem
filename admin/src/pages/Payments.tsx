@@ -26,7 +26,10 @@ export default function PaymentsPage() {
 
   return (
     <div>
-      <PageTitle title="To'lovlar" subtitle="Chekni tekshiring → Tasdiqlash. Hayriya to'lovi tasdiqlanganda ustoz hissasiga qo'shiladi." />
+      <PageTitle
+        title="To'lovlar"
+        subtitle="Hayriya to'lovlarini admin tasdiqlaydi (ustoz hissasiga qo'shiladi). Ustozga to'lovlarni ustozning o'zi tekshiradi."
+      />
       <div className="mb-4 flex flex-wrap gap-2">
         {['PENDING', 'CONFIRMED', 'REJECTED', ''].map((s) => (
           <button key={s} onClick={() => setStatus(s)} className={chip(status === s)}>
@@ -36,7 +39,7 @@ export default function PaymentsPage() {
         <span className="mx-1 w-px bg-border" />
         {[
           ['', 'Barcha turlar'],
-          ['MBANK_SELF', 'MBank (ustozga)'],
+          ['MBANK_SELF', 'Ustozga'],
           ['HAYRIYA', 'Hayriya'],
         ].map(([k, v]) => (
           <button key={k} onClick={() => setType(k)} className={chip(type === k)}>
@@ -56,12 +59,12 @@ export default function PaymentsPage() {
             <td>
               <p>{p.lesson ? p.lesson.subject.name : 'Hayriya xayriyasi'}</p>
               <p className="text-xs text-muted-foreground">
-                {p.teacher.user.fullName} · {p.period} · {dateUz(p.createdAt)}
+                {p.teacher.user.fullName} · {p.period ? `${dateUz(p.period)} darsi` : dateUz(p.createdAt)}
               </p>
             </td>
             <td className="font-extrabold">{som(p.amount)}</td>
             <td>
-              <Badge variant={p.paymentType === 'HAYRIYA' ? 'gold' : 'outline'}>{p.paymentType === 'HAYRIYA' ? 'Hayriya' : 'MBank'}</Badge>
+              <Badge variant={p.paymentType === 'HAYRIYA' ? 'gold' : 'outline'}>{p.paymentType === 'HAYRIYA' ? 'Hayriya' : 'Ustozga'}</Badge>
             </td>
             <td>
               {p.receipt_url ? (
@@ -76,7 +79,8 @@ export default function PaymentsPage() {
               <Badge variant={p.status === 'CONFIRMED' ? 'default' : p.status === 'REJECTED' ? 'red' : 'gold'}>{PAYMENT_STATUS[p.status].label}</Badge>
             </td>
             <td>
-              {p.status === 'PENDING' && (
+              {p.status === 'PENDING' && p.paymentType !== 'HAYRIYA' && <span className="text-xs text-muted-foreground">Ustoz tekshiradi</span>}
+              {p.status === 'PENDING' && p.paymentType === 'HAYRIYA' && (
                 <div className="flex gap-1.5">
                   <Button size="sm" onClick={() => act.mutate({ id: p.id, ok: true })}>
                     <Check /> Tasdiqlash

@@ -75,6 +75,7 @@ cd backend && npm run build    # yoki har bir papkada alohida
 | `TUNDUK_API_URL` | Tunduk pasport tekshiruvi. **Bo'sh = MOCK**: ID ichida `0000` bo'lsa — yaroqsiz |
 | `HAYRIYA_MBANK_NUMBER` | Hayriya jamg'armasi MBank raqami |
 | `ADMIN_IDS` | Admin Telegram ID lari, vergul bilan (`ADMIN_TELEGRAM_IDS` ham qabul qilinadi) |
+| `HAYRIYA_MBANK_LINK` | Ixtiyoriy: MBank o'tkazma havolasi (talabaga «MBank orqali o'tkazish» tugmasi) |
 | `DONATION_LIMIT` | Jamg'arma limiti (standart 20000). Admin paneldan o'zgartiriladi |
 | `MINIAPP_URL`, `ADMIN_URL` | Frontend manzillari (bot tugmalari uchun **https** bo'lishi shart) |
 | `BOT_WEBHOOK_URL` | Prod uchun webhook (`https://api.../api/bot/webhook`). Bo'sh = long-polling |

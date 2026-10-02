@@ -39,7 +39,7 @@ export class TeachersService {
         user: { select: { fullName: true, username: true } },
         subjects: true,
         locations: true,
-        lessons: { where: { isActive: true }, include: { subject: true, location: true }, orderBy: { weekDay: 'asc' } },
+        lessons: { where: { isActive: true }, include: { subject: true, location: true }, orderBy: { id: 'asc' } },
       },
     });
     if (!t) throw new NotFoundException('Ustoz topilmadi');
@@ -57,7 +57,7 @@ export class TeachersService {
         donationFund: true,
         lessons: {
           include: { subject: true, location: true, _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } } },
-          orderBy: [{ weekDay: 'asc' }, { id: 'asc' }],
+          orderBy: [{ id: 'asc' }],
         },
       },
     });
@@ -70,6 +70,7 @@ export class TeachersService {
       data: {
         telegramPhone: dto.telegramPhone?.replace(/[\s-]/g, ''),
         mbankNumber: dto.mbankNumber?.replace(/[\s-]/g, ''),
+        mbankLink: dto.mbankLink === undefined ? undefined : dto.mbankLink.trim() || null,
         bio: dto.bio,
         subjects: dto.subjectIds ? { set: dto.subjectIds.map((id) => ({ id })) } : undefined,
       },
