@@ -41,7 +41,7 @@ export function VideoPlayer({ url, title, poster }: { url: string; title?: strin
   }, [url, poster]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-card shadow-soft">
+    <div className="overflow-hidden rounded-2xl border bg-card">
       <div ref={ref} className="aspect-video w-full bg-black [&_.plyr]:h-full" />
       {title && <p className="px-3.5 py-2.5 text-sm font-bold">{title}</p>}
     </div>

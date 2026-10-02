@@ -4,10 +4,10 @@ import { resolveStartMinutes } from '../common/lesson-time';
 import { minutesToHHmm } from '../common/prayer-times';
 import { effectivePrice } from '../common/pricing';
 import { signStreamToken } from '../common/stream-token';
-import { currentPeriod, zonedParts } from '../common/time.util';
+import { dateKeyDaysAgo, nextLessonDates, zonedParts } from '../common/time.util';
 import { AppConfig } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { AdvanceLessonDto, CreateLessonDto, UpdateLessonDto } from './lessons.dto';
+import { CreateLessonDto, UpdateLessonDto } from './lessons.dto';
 
 export const LESSON_INCLUDE = {
   subject: true,
@@ -24,13 +24,15 @@ export class LessonsService {
   ) {}
 
   /** Вычисляемые поля для фронтенда */
-  decorate<T extends { priceTier: number; customPrice: number | null; startTime: string; startClock: string | null; currentPageTo: number; bookTotalPages: number }>(l: T) {
+  decorate<T extends { priceTier: number; customPrice: number | null; startTime: string; startClock: string | null; currentPage: number | null; bookTotalPages: number }>(l: T) {
     const m = resolveStartMinutes(l, zonedParts(new Date(), this.cfg.timezone));
+    const pagesDone = l.currentPage ? Math.min(l.currentPage - 1, l.bookTotalPages) : null;
     return {
       ...l,
       price: effectivePrice(l),
       approxStart: m !== null ? minutesToHHmm(m) : null,
-      progressPercent: Math.round((Math.min(l.currentPageTo, l.bookTotalPages) / l.bookTotalPages) * 100),
+      pagesDone,
+      progressPercent: pagesDone !== null ? Math.round((pagesDone / l.bookTotalPages) * 100) : null,
     };
   }
 
@@ -38,7 +40,7 @@ export class LessonsService {
     const where: Prisma.LessonWhereInput = {
       isActive: true,
       subjectId: q.subjectId,
-      weekDay: q.weekDay,
+      weekDays: q.weekDay ? { has: q.weekDay } : undefined,
       teacherId: q.teacherId,
     };
     if (q.mine) {
@@ -49,7 +51,7 @@ export class LessonsService {
     const lessons = await this.prisma.lesson.findMany({
       where,
       include: { ...LESSON_INCLUDE, enrollments: { where: { studentId: user.id }, select: { status: true } } },
-      orderBy: [{ weekDay: 'asc' }, { id: 'asc' }],
+      orderBy: [{ id: 'asc' }],
     });
     return lessons.map(({ enrollments, ...l }) => ({
       ...this.decorate(l),
@@ -73,8 +75,9 @@ export class LessonsService {
     });
     if (enrollment?.status !== 'ACTIVE') return false;
     if (effectivePrice(lesson) === 0) return true;
+    // Оплата за день: платные материалы открыты, если урок оплачен хотя бы раз за последние 30 дней
     const paid = await this.prisma.payment.findFirst({
-      where: { studentId: user.id, lessonId: lesson.id, status: 'CONFIRMED', period: currentPeriod(this.cfg.timezone) },
+      where: { studentId: user.id, lessonId: lesson.id, status: 'CONFIRMED', period: { gte: dateKeyDaysAgo(30, this.cfg.timezone) } },
     });
     return !!paid;
   }
@@ -82,11 +85,12 @@ export class LessonsService {
   async detail(user: User, id: number) {
     const lesson = await this.findOrThrow(id);
     const access = await this.hasAccess(user, lesson);
-    const period = currentPeriod(this.cfg.timezone);
+    const dates = nextLessonDates(lesson.weekDays, 4, this.cfg.timezone);
+    const nextDate = dates[0]?.date ?? null;
     const [contents, enrollment, payments, attendances, grades, sessions] = await Promise.all([
       this.prisma.lessonContent.findMany({ where: { lessonId: id }, orderBy: [{ type: 'asc' }, { createdAt: 'desc' }] }),
       this.prisma.enrollment.findUnique({ where: { lessonId_studentId: { lessonId: id, studentId: user.id } } }),
-      this.prisma.payment.findMany({ where: { lessonId: id, studentId: user.id }, orderBy: { createdAt: 'desc' }, take: 6 }),
+      this.prisma.payment.findMany({ where: { lessonId: id, studentId: user.id }, orderBy: { createdAt: 'desc' }, take: 10 }),
       this.prisma.attendance.findMany({
         where: { studentId: user.id, session: { lessonId: id } },
         include: { session: { select: { date: true, pageFrom: true, pageTo: true, topic: true } } },
@@ -101,10 +105,13 @@ export class LessonsService {
       ...this.decorate(lesson),
       hasAccess: access,
       enrolled: enrollment?.status === 'ACTIVE',
-      paidThisPeriod: payments.some((p) => p.period === period && p.status === 'CONFIRMED'),
-      pendingPayment: payments.find((p) => p.period === period && p.status === 'PENDING') ?? null,
-      period,
-      payments,
+      nextDate,
+      nextDates: dates,
+      // Оплачен ли ближайший день урока
+      paidNext: payments.some((p) => p.period === nextDate && p.status === 'CONFIRMED'),
+      pendingNext: payments.find((p) => p.period === nextDate && p.status === 'PENDING') ?? null,
+      // Для ученика способ оплаты (учителю / фонд) не раскрывается
+      payments: payments.map(({ paymentType: _t, ...p }) => p),
       attendances,
       grades,
       sessions,
@@ -130,9 +137,8 @@ export class LessonsService {
     };
   }
 
-  private validatePages(d: { bookTotalPages: number; currentPageFrom: number; currentPageTo: number }) {
-    if (d.currentPageFrom > d.currentPageTo) throw new BadRequestException('Boshlang\'ich bet oxirgi betdan katta bo\'lmasin');
-    if (d.currentPageTo > d.bookTotalPages) throw new BadRequestException('Bet kitobdagi betlar sonidan oshmasin');
+  private validatePages(d: { bookTotalPages: number; currentPage?: number | null }) {
+    if (d.currentPage && d.currentPage > d.bookTotalPages) throw new BadRequestException('Bet kitobdagi betlar sonidan oshmasin');
   }
 
   async create(teacherId: number, dto: CreateLessonDto) {
@@ -141,7 +147,16 @@ export class LessonsService {
     // Учитель автоматически получает предмет урока
     await this.prisma.teacher.update({ where: { id: teacherId }, data: { subjects: { connect: { id: dto.subjectId } } } });
     return this.prisma.lesson.create({
-      data: { ...dto, teacherId, isContinuous: dto.isContinuous ?? true, customPrice: dto.customPrice || null },
+      data: {
+        ...dto,
+        weekDays: [...new Set(dto.weekDays)].sort(),
+        teacherId,
+        isContinuous: dto.isContinuous ?? true,
+        customPrice: dto.customPrice || null,
+        // Новая книга начинается с 1-й страницы; для продолжающейся страницу спросим при старте урока
+        currentPage: dto.isNewBook ? 1 : (dto.currentPage ?? null),
+        topic: dto.topic || null,
+      },
       include: LESSON_INCLUDE,
     });
   }
@@ -153,7 +168,11 @@ export class LessonsService {
     if (dto.locationId !== undefined) await this.checkLocation(lesson.teacherId, dto.locationId);
     return this.prisma.lesson.update({
       where: { id },
-      data: { ...dto, customPrice: dto.customPrice === 0 ? null : dto.customPrice },
+      data: {
+        ...dto,
+        weekDays: dto.weekDays ? [...new Set(dto.weekDays)].sort() : undefined,
+        customPrice: dto.customPrice === 0 ? null : dto.customPrice,
+      },
       include: LESSON_INCLUDE,
     });
   }
@@ -162,29 +181,6 @@ export class LessonsService {
     const lesson = await this.findOrThrow(id);
     if (teacherId && lesson.teacherId !== teacherId) throw new ForbiddenException('Bu sizning darsingiz emas');
     return this.prisma.lesson.update({ where: { id }, data: { isActive: false } });
-  }
-
-  /**
-   * Продвижение по книге: следующий урок начинается со следующей страницы,
-   * диапазон сохраняет прежний размер, тема берётся из nextTopic.
-   */
-  async advance(id: number, dto: AdvanceLessonDto = {}, teacherId?: number) {
-    const l = await this.findOrThrow(id);
-    if (teacherId && l.teacherId !== teacherId) throw new ForbiddenException('Bu sizning darsingiz emas');
-    const span = l.currentPageTo - l.currentPageFrom;
-    const from = dto.currentPageFrom ?? Math.min(l.currentPageTo + 1, l.bookTotalPages);
-    const to = dto.currentPageTo ?? Math.min(from + span, l.bookTotalPages);
-    this.validatePages({ bookTotalPages: l.bookTotalPages, currentPageFrom: from, currentPageTo: to });
-    return this.prisma.lesson.update({
-      where: { id },
-      data: {
-        currentPageFrom: from,
-        currentPageTo: to,
-        topic: dto.topic ?? l.nextTopic ?? l.topic,
-        nextTopic: dto.nextTopic !== undefined ? dto.nextTopic : null,
-      },
-      include: LESSON_INCLUDE,
-    });
   }
 
   async enroll(user: User, lessonId: number) {

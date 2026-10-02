@@ -1,52 +1,55 @@
 import { useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
-import { Check, Copy, ImagePlus, X } from 'lucide-react';
+import { Check, Copy, ExternalLink, ImagePlus, X } from 'lucide-react';
 import { cn, som } from '@shared/lib/utils';
-import { copyText } from '@/lib/telegram';
+import { copyText, openLink } from '@/lib/telegram';
 
-/** Реквизиты MBank: крупный номер, кнопка копирования и QR-код */
-export function MbankCard({ number, name, amount, note }: { number: string; name: string; amount?: number; note?: string }) {
+/**
+ * Реквизиты MBank: номер с кнопкой копирования, сумма и (если есть) ссылка на перевод.
+ * QR убран: MBank не читает произвольный QR, а с того же телефона его не отсканировать.
+ */
+export function MbankCard({ number, amount, link }: { number: string; amount?: number; link?: string | null }) {
   const [copied, setCopied] = useState<'num' | 'sum' | null>(null);
-  const display = number.replace(/^\+?(996)(\d{3})(\d{3})(\d{3})$/, '+$1 $2 $3 $4');
+  const digits = number.replace(/[^\d+]/g, '');
+  const display = digits.replace(/^\+?(996)(\d{3})(\d{3})(\d{3})$/, '+$1 $2 $3 $4');
   const copy = async (what: 'num' | 'sum', text: string) => {
     await copyText(text);
     setCopied(what);
     setTimeout(() => setCopied(null), 1600);
   };
-  // QR содержит номер и сумму — удобно сканировать камерой и вставлять в MBank
-  const qrValue = `MBANK:${number.replace(/\s/g, '')}${amount ? `;SUM:${amount}` : ''}${note ? `;NOTE:${note}` : ''}`;
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B5E46] via-[#0E7A5A] to-[#13906b] p-5 text-white shadow-soft">
-      <div className="ornament absolute inset-0 opacity-60" />
-      <div className="relative flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[.2em] text-white/70">MBank</p>
-          <p className="mt-0.5 truncate text-sm font-semibold text-white/90">{name}</p>
-          {amount ? <p className="mt-3 text-3xl font-extrabold tracking-tight">{som(amount)}</p> : null}
+    <div className="space-y-2">
+      <button onClick={() => copy('num', digits)} className="flex w-full items-center justify-between rounded-2xl border bg-card px-4 py-4 text-left">
+        <div>
+          <p className="text-xs text-muted-foreground">MBank raqami</p>
+          <p className="mt-0.5 font-mono text-lg font-semibold tracking-wide">{display}</p>
         </div>
-        <div className="shrink-0 rounded-2xl bg-white p-2 shadow-lg">
-          <QRCodeSVG value={qrValue} size={92} fgColor="#0B3F31" bgColor="#ffffff" level="M" />
-        </div>
-      </div>
-      <div className="relative mt-4 flex items-center gap-2">
-        <button
-          onClick={() => copy('num', number)}
-          className="flex flex-1 items-center justify-between rounded-2xl bg-white/12 px-4 py-3 text-left ring-1 ring-white/20 backdrop-blur transition active:scale-[.99]"
-        >
-          <span className="whitespace-nowrap font-mono text-[15px] font-bold tracking-wide">{display}</span>
-          {copied === 'num' ? <Check className="size-5 text-[#E2C98D]" /> : <Copy className="size-5 text-white/80" />}
+        <span className={cn('flex items-center gap-1.5 text-sm font-medium', copied === 'num' ? 'text-primary' : 'text-muted-foreground')}>
+          {copied === 'num' ? <Check className="size-4" /> : <Copy className="size-4" />}
+          {copied === 'num' ? 'Nusxalandi' : 'Nusxalash'}
+        </span>
+      </button>
+      {amount ? (
+        <button onClick={() => copy('sum', String(amount))} className="flex w-full items-center justify-between rounded-2xl border bg-card px-4 py-4 text-left">
+          <div>
+            <p className="text-xs text-muted-foreground">Summa</p>
+            <p className="mt-0.5 text-lg font-semibold">{som(amount)}</p>
+          </div>
+          <span className={cn('flex items-center gap-1.5 text-sm font-medium', copied === 'sum' ? 'text-primary' : 'text-muted-foreground')}>
+            {copied === 'sum' ? <Check className="size-4" /> : <Copy className="size-4" />}
+            {copied === 'sum' ? 'Nusxalandi' : 'Nusxalash'}
+          </span>
         </button>
-        {amount ? (
-          <button
-            onClick={() => copy('sum', String(amount))}
-            className="rounded-2xl bg-[#C4A15A] px-3 py-3 text-xs font-extrabold text-[#2b1f08] transition active:scale-95"
-          >
-            {copied === 'sum' ? <Check className="size-5" /> : 'Summa'}
-          </button>
-        ) : null}
-      </div>
-      <p className="relative mt-3 text-[11px] text-white/70">Raqamni nusxalang → MBank ilovasida o'tkazma qiling → chekni yuklang.</p>
+      ) : null}
+      {link && (
+        <button
+          onClick={() => openLink(link)}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/40 px-4 py-3.5 text-sm font-semibold text-primary"
+        >
+          <ExternalLink className="size-4" /> MBank orqali o'tkazish
+        </button>
+      )}
+      <p className="px-1 pt-1 text-xs text-muted-foreground">MBank ilovasida shu raqamga o'tkazing, so'ng chek rasmini yuklang.</p>
     </div>
   );
 }
@@ -57,7 +60,7 @@ export function ReceiptInput({ file, onChange }: { file: File | null; onChange: 
   return (
     <label
       className={cn(
-        'relative flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed p-3 transition',
+        'relative flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed p-4 transition',
         file ? 'border-primary/50 bg-primary/5' : 'border-border hover:bg-muted/50',
       )}
     >
@@ -68,14 +71,14 @@ export function ReceiptInput({ file, onChange }: { file: File | null; onChange: 
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
       />
       {preview ? (
-        <img src={preview} alt="Chek" className="size-14 rounded-xl object-cover" />
+        <img src={preview} alt="Chek" className="size-12 rounded-xl object-cover" />
       ) : (
-        <span className="grid size-14 place-items-center rounded-xl bg-gold-soft text-gold-foreground dark:text-gold">
-          <ImagePlus className="size-6" />
+        <span className="grid size-12 place-items-center rounded-xl bg-muted text-muted-foreground">
+          <ImagePlus className="size-5" />
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold">{file ? 'Chek tanlandi' : 'Chekni yuklang'}</p>
+        <p className="text-sm font-medium">{file ? 'Chek tanlandi' : 'Chek rasmini yuklang'}</p>
         <p className="truncate text-xs text-muted-foreground">{file ? file.name : 'Skrinshot yoki PDF (15 MB gacha)'}</p>
       </div>
       {file && (

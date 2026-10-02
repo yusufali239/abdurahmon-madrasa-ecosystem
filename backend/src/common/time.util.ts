@@ -96,3 +96,38 @@ export function weekDayName(weekDay: number): string {
 export function formatSom(amount: number): string {
   return `${new Intl.NumberFormat('ru-RU').format(amount).replace(/ /g, ' ')} som`;
 }
+
+/** "YYYY-MM-DD" для календарной даты в поясе */
+export function dateKey(p: Pick<ZonedParts, 'year' | 'month' | 'day'>): string {
+  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+}
+
+/** "Pa, Ch" — короткие названия дней */
+export const WEEKDAYS_SHORT_UZ = ['', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
+export function weekDaysText(days: number[], short = false): string {
+  const list = [...days].sort((a, b) => a - b);
+  return list.map((d) => (short ? WEEKDAYS_SHORT_UZ[d] : WEEKDAYS_UZ[d])).join(', ');
+}
+
+/**
+ * Ближайшие даты урока (начиная с сегодняшней) по дням недели.
+ * Используется для оплаты «за день».
+ */
+export function nextLessonDates(weekDays: number[], count = 4, tz: string = TZ): Array<{ date: string; weekDay: number; label: string }> {
+  const out: Array<{ date: string; weekDay: number; label: string }> = [];
+  if (!weekDays.length) return out;
+  const now = Date.now();
+  for (let i = 0; i < 60 && out.length < count; i++) {
+    const d = new Date(now + i * 86_400_000);
+    const p = zonedParts(d, tz);
+    if (weekDays.includes(p.weekDay)) {
+      out.push({ date: dateKey(p), weekDay: p.weekDay, label: `${i === 0 ? 'Bugun, ' : i === 1 ? 'Ertaga, ' : ''}${WEEKDAYS_UZ[p.weekDay]}, ${p.day}-${MONTHS_UZ[p.month - 1]}` });
+    }
+  }
+  return out;
+}
+
+/** Дата N дней назад "YYYY-MM-DD" */
+export function dateKeyDaysAgo(days: number, tz: string = TZ): string {
+  return dateKey(zonedParts(new Date(Date.now() - days * 86_400_000), tz));
+}

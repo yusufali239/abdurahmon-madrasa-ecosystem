@@ -13,9 +13,10 @@ export class PaymentsBot implements OnModuleInit {
   onModuleInit() {
     this.botService.features.callbackQuery(/^pay:(ok|no):(\d+)$/, async (ctx) => {
       const [, action, id] = ctx.match!;
-      const actor: PaymentActor = ctx.isAdmin
-        ? { kind: 'admin', telegramId: String(ctx.from.id) }
-        : { kind: 'teacher', userId: ctx.dbUser!.id };
+      // Оплата учителю проверяет учитель, оплата в фонд — админ
+      const type = await this.payments.typeOf(Number(id));
+      const actor: PaymentActor =
+        type === 'HAYRIYA' ? { kind: 'admin', telegramId: String(ctx.from.id) } : { kind: 'teacher', userId: ctx.dbUser!.id };
       try {
         const p = action === 'ok' ? await this.payments.confirm(Number(id), actor) : await this.payments.reject(Number(id), actor);
         await ctx.answerCallbackQuery({ text: p.status === 'CONFIRMED' ? `✅ #${id} tasdiqlandi` : `❌ #${id} rad etildi` });

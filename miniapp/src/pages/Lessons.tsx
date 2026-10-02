@@ -11,8 +11,8 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     <button
       onClick={onClick}
       className={cn(
-        'shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-bold transition',
-        active ? 'border-primary bg-primary text-primary-foreground shadow-soft' : 'bg-card text-muted-foreground',
+        'shrink-0 rounded-full border px-4 py-2 text-sm transition',
+        active ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground',
       )}
     >
       {children}
@@ -41,8 +41,8 @@ export default function LessonsPage() {
 
   return (
     <div>
-      <PageHeader title="Darslar" subtitle="Fiqh, Aqida, Arab tili, Qur'on, Hadis" />
-      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-2">
+      <PageHeader title="Darslar" />
+      <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-3">
         <Chip active={!subjectId && !mine} onClick={() => setParams({}, { replace: true })}>
           Barchasi
         </Chip>
@@ -55,14 +55,14 @@ export default function LessonsPage() {
           </Chip>
         ))}
       </div>
-      <div className="mb-4 grid grid-cols-7 gap-1.5">
+      <div className="mb-6 grid grid-cols-7 gap-1.5">
         {[1, 2, 3, 4, 5, 6, 7].map((d) => (
           <button
             key={d}
             onClick={() => set('day', weekDay === String(d) ? null : String(d))}
             className={cn(
-              'rounded-xl border py-2 text-xs font-bold transition',
-              weekDay === String(d) ? 'border-gold bg-gold text-gold-foreground shadow-gold' : 'bg-card text-muted-foreground',
+              'rounded-xl border py-2.5 text-sm transition',
+              weekDay === String(d) ? 'border-primary text-primary' : 'text-muted-foreground',
             )}
           >
             {WEEKDAYS_SHORT[d]}

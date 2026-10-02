@@ -6,6 +6,7 @@ import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Dialog, DialogContent } from '@shared/ui/dialog';
 import { Field, Input, Select, Textarea } from '@shared/ui/input';
+import { ThemeToggle } from '@shared/ui/theme-toggle';
 import { cn, dateUz, MAP_PROVIDERS, PAYMENT_STATUS, som } from '@shared/lib/utils';
 import { api, absUrl, setDevId } from '@/lib/api';
 import { useMe } from '@/lib/me';
@@ -36,8 +37,8 @@ function StudentSection() {
           { label: "O'rtacha baho", value: s?.averageScore ?? '—' },
           { label: 'Darslar', value: s?.attendance.total ?? 0 },
         ].map((x) => (
-          <div key={x.label} className="rounded-2xl border bg-card p-3 text-center shadow-soft">
-            <p className="text-xl font-extrabold text-primary">{x.value}</p>
+          <div key={x.label} className="rounded-2xl border bg-card p-3 text-center ">
+            <p className="text-xl font-semibold text-primary">{x.value}</p>
             <p className="text-[11px] font-semibold text-muted-foreground">{x.label}</p>
           </div>
         ))}
@@ -49,11 +50,11 @@ function StudentSection() {
       </Button>
 
       <SectionTitle>Baholar</SectionTitle>
-      <div className="rounded-2xl border bg-card shadow-soft">
+      <div className="rounded-2xl border bg-card ">
         {!s?.grades.length && <p className="p-4 text-sm text-muted-foreground">Hali baholar yo'q.</p>}
         {s?.grades.slice(0, 10).map((g) => (
           <div key={g.id} className="flex items-center gap-3 border-b px-4 py-3 last:border-0">
-            <span className="grid size-9 place-items-center rounded-xl bg-primary/10 font-extrabold text-primary">{g.score}</span>
+            <span className="grid size-9 place-items-center rounded-xl bg-primary/10 font-semibold text-primary">{g.score}</span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold">{g.lesson.subject.name}</p>
               {g.comment && <p className="truncate text-xs text-muted-foreground">{g.comment}</p>}
@@ -67,13 +68,13 @@ function StudentSection() {
       <div className="space-y-2">
         {!payments.data?.length && <p className="text-sm text-muted-foreground">To'lovlar yo'q.</p>}
         {payments.data?.map((p) => (
-          <div key={p.id} className="flex items-center justify-between rounded-2xl border bg-card px-4 py-3 shadow-soft">
+          <div key={p.id} className="flex items-center justify-between rounded-2xl border bg-card px-4 py-3 ">
             <div className="min-w-0">
               <p className="text-sm font-bold">
-                {som(p.amount)} · {p.lesson ? p.lesson.subject.name : 'Hayriya'}
+                {som(p.amount)} · {p.lesson ? p.lesson.subject.name : 'Xayriya'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {p.paymentType === 'HAYRIYA' ? 'Hayriya jamg\'armasi' : `MBank → ${p.teacher?.user.fullName}`} · {dateUz(p.createdAt)}
+                {p.teacher?.user.fullName} · {p.period ? `${dateUz(p.period)} darsi` : dateUz(p.createdAt)}
               </p>
             </div>
             <StatusBadge status={p.status} />
@@ -88,6 +89,7 @@ interface TeacherMe {
   id: number;
   telegramPhone: string;
   mbankNumber: string;
+  mbankLink: string | null;
   bio: string | null;
   subjects: Subject[];
   locations: Location[];
@@ -153,11 +155,17 @@ function TeacherSection() {
   const t = useQuery({ queryKey: ['teacher-me'], queryFn: () => api<TeacherMe>('/teachers/me') });
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api<Subject[]>('/subjects') });
   const payments = useQuery({ queryKey: ['payments', 'teacher'], queryFn: () => api<Payment[]>('/payments/teacher') });
-  const [form, setForm] = useState({ telegramPhone: '', mbankNumber: '', bio: '', subjectIds: [] as number[] });
+  const [form, setForm] = useState({ telegramPhone: '', mbankNumber: '', mbankLink: '', bio: '', subjectIds: [] as number[] });
   const [locOpen, setLocOpen] = useState(false);
   useEffect(() => {
     if (t.data)
-      setForm({ telegramPhone: t.data.telegramPhone, mbankNumber: t.data.mbankNumber, bio: t.data.bio || '', subjectIds: t.data.subjects.map((s) => s.id) });
+      setForm({
+        telegramPhone: t.data.telegramPhone,
+        mbankNumber: t.data.mbankNumber,
+        mbankLink: t.data.mbankLink || '',
+        bio: t.data.bio || '',
+        subjectIds: t.data.subjects.map((s) => s.id),
+      });
   }, [t.data]);
   const save = useMutation({
     mutationFn: () => api('/teachers/me', { method: 'PATCH', body: form }),
@@ -191,15 +199,15 @@ function TeacherSection() {
 
       {pending.length > 0 && (
         <>
-          <SectionTitle>Tasdiqlanmagan to'lovlar ({pending.length})</SectionTitle>
+          <SectionTitle>Chekni tekshiring ({pending.length})</SectionTitle>
           <div className="space-y-2">
             {pending.map((p) => (
-              <div key={p.id} className="rounded-2xl border border-gold/40 bg-card p-3.5 shadow-soft">
+              <div key={p.id} className="rounded-2xl border border-gold/40 bg-card p-3.5 ">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-bold">{p.student?.fullName}</p>
                     <p className="text-xs text-muted-foreground">
-                      {som(p.amount)} · {p.lesson?.subject.name} · {p.period}
+                      {som(p.amount)} · {p.lesson?.subject.name} · {p.period ? dateUz(p.period) : ''}
                     </p>
                   </div>
                   {p.receipt_url && (
@@ -223,18 +231,21 @@ function TeacherSection() {
       )}
 
       <SectionTitle>Ustoz ma'lumotlari</SectionTitle>
-      <div className="space-y-3 rounded-2xl border bg-card p-4 shadow-soft">
+      <div className="space-y-3 rounded-2xl border bg-card p-4 ">
         <Field label="Telegram raqami" hint="Talabalar siz bilan bog'lanadi">
           <div className="relative">
             <Phone className="absolute left-3 top-3.5 size-4 text-muted-foreground" />
             <Input className="pl-9" value={form.telegramPhone} onChange={(e) => setForm({ ...form, telegramPhone: e.target.value })} inputMode="tel" />
           </div>
         </Field>
-        <Field label="MBank raqami" hint="MBANK_SELF darslarda to'lov shu raqamga tushadi">
+        <Field label="MBank raqami" hint="«O'zimga» darslarda to'lov shu raqamga tushadi">
           <div className="relative">
             <Wallet className="absolute left-3 top-3.5 size-4 text-muted-foreground" />
             <Input className="pl-9" value={form.mbankNumber} onChange={(e) => setForm({ ...form, mbankNumber: e.target.value })} inputMode="tel" />
           </div>
+        </Field>
+        <Field label="MBank havolasi (ixtiyoriy)" hint="Agar MBank sizga o'tkazma havolasini bergan bo'lsa — talabaga «MBank orqali o'tkazish» tugmasi chiqadi">
+          <Input value={form.mbankLink} onChange={(e) => setForm({ ...form, mbankLink: e.target.value })} placeholder="https://..." />
         </Field>
         <Field label="Fanlar">
           <div className="flex flex-wrap gap-2">
@@ -264,7 +275,7 @@ function TeacherSection() {
       <SectionTitle action={<Button size="sm" variant="secondary" onClick={() => setLocOpen(true)}><Plus /> Qo'shish</Button>}>Manzillar</SectionTitle>
       <div className="space-y-2">
         {t.data?.locations.map((l) => (
-          <div key={l.id} className="flex items-center gap-3 rounded-2xl border bg-card p-3.5 shadow-soft">
+          <div key={l.id} className="flex items-center gap-3 rounded-2xl border bg-card p-3.5 ">
             <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
               <MapPin className="size-5" />
             </span>
@@ -295,12 +306,12 @@ export default function ProfilePage() {
   return (
     <div>
       <PageHeader title="Profil" />
-      <div className="flex items-center gap-4 rounded-3xl border bg-card p-4 shadow-soft">
-        <span className="grid size-16 place-items-center rounded-2xl bg-gradient-to-br from-primary to-[#0B3F31] text-xl font-extrabold text-primary-foreground">
+      <div className="flex items-center gap-4 rounded-2xl border bg-card p-5">
+        <span className="grid size-14 place-items-center rounded-2xl bg-primary/10 text-lg font-bold text-primary">
           {initials}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-lg font-extrabold">{me.fullName}</p>
+          <p className="truncate text-lg font-semibold">{me.fullName}</p>
           <p className="text-sm text-muted-foreground">{me.phone}</p>
           <div className="mt-1 flex gap-1.5">
             <Badge variant="solid">{me.role === 'TEACHER' ? 'Ustoz' : me.role === 'ADMIN' ? 'Admin' : 'Talaba'}</Badge>
@@ -309,6 +320,8 @@ export default function ProfilePage() {
         </div>
       </div>
       {me.role === 'TEACHER' ? <TeacherSection /> : <StudentSection />}
+      <SectionTitle>Ko'rinish</SectionTitle>
+      <ThemeToggle />
       {!inTelegram() && (
         <Button
           variant="ghost"

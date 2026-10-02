@@ -42,7 +42,7 @@ export default function NewsPage() {
           <article
             key={n.id}
             onClick={() => setOpen(n)}
-            className="animate-fade-up cursor-pointer overflow-hidden rounded-3xl border bg-card shadow-soft"
+            className="animate-fade-up cursor-pointer overflow-hidden rounded-3xl border bg-card"
             style={{ animationDelay: `${i * 40}ms` }}
           >
             {n.image_url ? (
@@ -57,7 +57,7 @@ export default function NewsPage() {
               <p className="text-[11px] font-bold uppercase tracking-wider text-gold">
                 {NEWS_TYPES[n.type]?.label} · {dateUz(n.createdAt)}
               </p>
-              <h2 className="mt-1 text-[17px] font-extrabold leading-snug">{n.title}</h2>
+              <h2 className="mt-1 text-[17px] font-semibold leading-snug">{n.title}</h2>
               <p className="mt-1.5 line-clamp-3 text-sm text-muted-foreground">{n.body}</p>
             </div>
           </article>

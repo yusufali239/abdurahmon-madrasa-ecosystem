@@ -36,8 +36,8 @@ module.exports = {
         sm: 'calc(var(--radius) - 4px)',
       },
       boxShadow: {
-        soft: '0 1px 2px rgba(20,35,30,.04), 0 8px 24px -12px rgba(14,122,90,.18)',
-        gold: '0 8px 24px -12px rgba(196,161,90,.45)',
+        soft: '0 1px 2px rgba(20,35,30,.04)',
+        gold: '0 1px 2px rgba(20,35,30,.04)',
       },
       backgroundImage: {
         // Исламский геометрический орнамент (8-конечная звезда), очень деликатный

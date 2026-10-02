@@ -6,6 +6,7 @@ import { computePrayerTimes, minutesToHHmm } from '../common/prayer-times';
 import { formatDateUz, weekDayName, zonedParts } from '../common/time.util';
 import { AppConfig } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { pageTopicLine } from '../lessons/lesson-format';
 import { esc, isTelegramSafeUrl } from './html';
 import { MessengerService } from './messenger.service';
 
@@ -49,8 +50,10 @@ export class MenuService {
       lines.push('', `📚 <b>Bugungi darslar (${today.length}):</b>`);
       for (const l of today) {
         const start = resolveStartMinutes(l, now);
+        const pt = pageTopicLine(l.currentPage, l.topic);
         lines.push(
-          `• ${esc(l.subject.name)} — ${esc(l.teacher.user.fullName)}\n   🕰 ${esc(l.startTime)}${start !== null ? ` (~${minutesToHHmm(start)})` : ''}, ${esc(l.endTime)}\n   📖 ${l.currentPageFrom}–${l.currentPageTo}-bet: ${esc(l.topic)}`,
+          `• ${esc(l.subject.name)} — ${esc(l.teacher.user.fullName)}\n   🕰 ${esc(l.startTime)}${start !== null ? ` (~${minutesToHHmm(start)})` : ''}, ${esc(l.endTime)}` +
+            (pt ? `\n   📖 ${pt}` : ''),
         );
       }
     } else {
@@ -77,12 +80,12 @@ export class MenuService {
     const include = { subject: true, teacher: { include: { user: true } }, location: true } as const;
     if (user.role === 'TEACHER') {
       return this.prisma.lesson.findMany({
-        where: { weekDay, isActive: true, teacher: { userId: user.id } },
+        where: { weekDays: { has: weekDay }, isActive: true, teacher: { userId: user.id } },
         include,
       });
     }
     return this.prisma.lesson.findMany({
-      where: { weekDay, isActive: true, enrollments: { some: { studentId: user.id, status: 'ACTIVE' } } },
+      where: { weekDays: { has: weekDay }, isActive: true, enrollments: { some: { studentId: user.id, status: 'ACTIVE' } } },
       include,
     });
   }

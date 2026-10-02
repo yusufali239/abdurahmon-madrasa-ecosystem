@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowRight, FileText, Headphones, Star, Trash2, Upload, Video } from 'lucide-react';
+import { FileText, Headphones, Star, Trash2, Upload, Video } from 'lucide-react';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Field, Input, Select, Textarea } from '@shared/ui/input';
-import { EMPTY_LESSON, LessonForm, lessonPayload, lessonToForm, type LessonFormValue } from '@shared/ui/lesson-form';
+import { EMPTY_LESSON, LessonForm, lessonFormMissing, lessonPayload, lessonToForm, type LessonFormValue } from '@shared/ui/lesson-form';
 import { Switch } from '@shared/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
-import { cn, dateUz } from '@shared/lib/utils';
+import { cn, dateUz, pageTopic } from '@shared/lib/utils';
 import { api } from '@/lib/api';
 import { haptic } from '@/lib/telegram';
 import type { LessonDetail, Location, Subject } from '@/lib/types';
-import { BookProgress, ErrorBox, ListSkeleton, PageHeader, SectionTitle } from '@/components/common';
+import { BookProgress, ErrorBox, ListSkeleton, PageHeader } from '@/components/common';
+import { FinishButton, StartButton, type TeacherSession } from '@/components/SessionControls';
 
 const TYPE_ICON = { AUDIO: Headphones, VIDEO: Video, PDF: FileText };
 
@@ -50,7 +51,7 @@ function ContentTab({ lesson }: { lesson: LessonDetail }) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-3 rounded-2xl border bg-card p-4 shadow-soft">
+      <div className="space-y-3 rounded-2xl border bg-card p-4">
         <div className="grid grid-cols-3 gap-1.5">
           {(['AUDIO', 'VIDEO', 'PDF'] as const).map((t) => {
             const Icon = TYPE_ICON[t];
@@ -86,7 +87,7 @@ function ContentTab({ lesson }: { lesson: LessonDetail }) {
         {lesson.contents.map((c) => {
           const Icon = TYPE_ICON[c.type];
           return (
-            <div key={c.id} className="flex items-center gap-3 rounded-2xl border bg-card p-3 shadow-soft">
+            <div key={c.id} className="flex items-center gap-3 rounded-2xl border bg-card p-3">
               <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
                 <Icon className="size-5" />
               </span>
@@ -127,7 +128,7 @@ function GradesTab({ lessonId }: { lessonId: number }) {
   });
   return (
     <div className="space-y-4">
-      <div className="space-y-3 rounded-2xl border bg-card p-4 shadow-soft">
+      <div className="space-y-3 rounded-2xl border bg-card p-4">
         <Field label="Talaba">
           <Select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
             <option value="">Tanlang…</option>
@@ -155,10 +156,10 @@ function GradesTab({ lessonId }: { lessonId: number }) {
           Baho qo'yish (talabaga botda xabar boradi)
         </Button>
       </div>
-      <div className="rounded-2xl border bg-card shadow-soft">
+      <div className="rounded-2xl border bg-card">
         {grades.data?.map((g) => (
           <div key={g.id} className="flex items-center gap-3 border-b px-4 py-3 last:border-0">
-            <span className="grid size-9 place-items-center rounded-xl bg-primary/10 font-extrabold text-primary">{g.score}</span>
+            <span className="grid size-9 place-items-center rounded-xl bg-primary/10 font-semibold text-primary">{g.score}</span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold">{g.student.fullName}</p>
               {g.comment && <p className="truncate text-xs text-muted-foreground">{g.comment}</p>}
@@ -172,6 +173,30 @@ function GradesTab({ lessonId }: { lessonId: number }) {
   );
 }
 
+/** Сегодняшнее занятие урока: ▶ начать / ⏹ закончить */
+function TodaySession({ lessonId }: { lessonId: number }) {
+  const s = useQuery({
+    queryKey: ['sessions', 'today', lessonId],
+    queryFn: () => api<TeacherSession>(`/lessons/${lessonId}/sessions/today`, { method: 'POST' }),
+  });
+  if (!s.data) return null;
+  const x = s.data;
+  return (
+    <div className="mb-8 rounded-2xl border bg-card p-5">
+      <p className="text-sm text-muted-foreground">Bugungi dars</p>
+      <p className="mt-1 font-semibold">
+        {x.status === 'DONE'
+          ? `Yakunlandi: ${x.pageFrom}–${x.pageTo}-bet`
+          : x.status === 'CANCELLED'
+            ? 'Bekor qilingan'
+            : pageTopic(x.pageFrom ?? x.lesson.currentPage, x.topic ?? x.lesson.topic) || 'Betni boshlashda belgilaysiz'}
+      </p>
+      {(x.status === 'SCHEDULED' || x.status === 'CONFIRMED') && <StartButton session={x} className="mt-4 w-full" />}
+      {x.status === 'STARTED' && <FinishButton session={x} className="mt-4 w-full" />}
+    </div>
+  );
+}
+
 export default function TeacherLessonPage() {
   const { id } = useParams();
   const isNew = id === 'new';
@@ -179,10 +204,11 @@ export default function TeacherLessonPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [form, setForm] = useState<LessonFormValue>(EMPTY_LESSON);
+  const [formError, setFormError] = useState<string | null>(null);
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api<Subject[]>('/subjects') });
   const teacher = useQuery({ queryKey: ['teacher-me'], queryFn: () => api<{ locations: Location[] }>('/teachers/me') });
+  const today = useQuery({ queryKey: ['today'], queryFn: () => api<{ weekDay: number }>('/meta/today') });
   const lesson = useQuery({ queryKey: ['lesson', lessonId], queryFn: () => api<LessonDetail>(`/lessons/${lessonId}`), enabled: !isNew });
-  const [adv, setAdv] = useState({ topic: '', nextTopic: '' });
 
   useEffect(() => {
     if (lesson.data) setForm(lessonToForm(lesson.data));
@@ -199,64 +225,52 @@ export default function TeacherLessonPage() {
     },
     onError: () => haptic('error'),
   });
-  const advance = useMutation({
-    mutationFn: () => api(`/lessons/${lessonId}/advance`, { body: { topic: adv.topic || undefined, nextTopic: adv.nextTopic || undefined } }),
-    onSuccess: () => {
-      haptic('success');
-      setAdv({ topic: '', nextTopic: '' });
-      qc.invalidateQueries({ queryKey: ['lesson', lessonId] });
-    },
-  });
+  const submit = () => {
+    const missing = lessonFormMissing(form);
+    setFormError(missing);
+    if (!missing) save.mutate();
+  };
 
-  if (!isNew && lesson.isLoading) return <div className="pt-4"><ListSkeleton rows={4} /></div>;
+  if (!isNew && lesson.isLoading) return <div className="pt-6"><ListSkeleton rows={3} /></div>;
   const l = lesson.data;
   const formNode = (
     <>
-      <LessonForm value={form} onChange={setForm} subjects={subjects.data ?? []} locations={teacher.data?.locations ?? []} />
-      {save.error && <div className="mt-3"><ErrorBox error={save.error} /></div>}
-      <Button size="lg" className="mt-4 w-full" loading={save.isPending} onClick={() => save.mutate()}>
-        {isNew ? 'Darsni yaratish' : save.isSuccess ? '✓ Saqlandi' : 'Saqlash'}
+      <LessonForm value={form} onChange={setForm} subjects={subjects.data ?? []} locations={teacher.data?.locations ?? []} isEdit={!isNew} />
+      {(formError || save.error) && <div className="mt-6">{formError ? <ErrorBox error={new Error(formError)} /> : <ErrorBox error={save.error} />}</div>}
+      <Button size="lg" className="mt-8 w-full" loading={save.isPending} onClick={submit}>
+        {isNew ? 'Darsni yaratish' : save.isSuccess ? 'Saqlandi ✓' : 'Saqlash'}
       </Button>
     </>
   );
 
   return (
     <div>
-      <PageHeader title={isNew ? 'Yangi dars' : `${l?.subject.name} — boshqaruv`} subtitle={l ? `${l.bookTitle}` : undefined} back />
+      <PageHeader title={isNew ? 'Yangi dars' : l?.subject.name ?? ''} subtitle={l?.bookTitle} back />
       {isNew ? (
         formNode
       ) : (
-        <Tabs defaultValue="info">
-          <TabsList className="grid grid-cols-3">
-            <TabsTrigger value="info">Ma'lumot</TabsTrigger>
-            <TabsTrigger value="content">Kontent</TabsTrigger>
-            <TabsTrigger value="grades">Baholar</TabsTrigger>
-          </TabsList>
-          <TabsContent value="info">
-            {l && (
-              <div className="mb-5 rounded-2xl border border-gold/40 bg-card p-4 shadow-soft">
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Kitob progressi</p>
-                <p className="mb-2 mt-1 font-extrabold">
-                  {l.currentPageFrom}–{l.currentPageTo}-bet · {l.topic}
-                </p>
-                <BookProgress from={l.currentPageFrom} to={l.currentPageTo} total={l.bookTotalPages} />
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <Input value={adv.topic} onChange={(e) => setAdv({ ...adv, topic: e.target.value })} placeholder={l.nextTopic || 'Keyingi mavzu'} />
-                  <Input value={adv.nextTopic} onChange={(e) => setAdv({ ...adv, nextTopic: e.target.value })} placeholder="Undan keyingi" />
-                </div>
-                <Button variant="gold" className="mt-2 w-full" loading={advance.isPending} onClick={() => advance.mutate()}>
-                  Keyingi darsga o'tish ({Math.min(l.currentPageTo + 1, l.bookTotalPages)}-betdan) <ArrowRight />
-                </Button>
-              </div>
-            )}
-            <SectionTitle>Dars sozlamalari</SectionTitle>
-            {formNode}
-          </TabsContent>
-          <TabsContent value="content">{l && <ContentTab lesson={l} />}</TabsContent>
-          <TabsContent value="grades">
-            <GradesTab lessonId={lessonId} />
-          </TabsContent>
-        </Tabs>
+        <>
+          {l && today.data && l.weekDays.includes(today.data.weekDay) && <TodaySession lessonId={lessonId} />}
+          {l && (
+            <div className="mb-8">
+              <BookProgress done={l.pagesDone} total={l.bookTotalPages} />
+            </div>
+          )}
+          <Tabs defaultValue="info">
+            <TabsList className="grid grid-cols-3">
+              <TabsTrigger value="info">Sozlamalar</TabsTrigger>
+              <TabsTrigger value="content">Materiallar</TabsTrigger>
+              <TabsTrigger value="grades">Baholar</TabsTrigger>
+            </TabsList>
+            <TabsContent value="info" className="mt-6">
+              {formNode}
+            </TabsContent>
+            <TabsContent value="content">{l && <ContentTab lesson={l} />}</TabsContent>
+            <TabsContent value="grades">
+              <GradesTab lessonId={lessonId} />
+            </TabsContent>
+          </Tabs>
+        </>
       )}
     </div>
   );

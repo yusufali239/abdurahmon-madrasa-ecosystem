@@ -27,15 +27,15 @@ export class PaymentsController {
     return this.payments.info(user, lessonId);
   }
 
-  /** Оплата урока: multipart (lessonId, receipt — фото/PDF чека) */
+  /** Оплата одного дня урока: multipart (lessonId, date YYYY-MM-DD, receipt — фото/PDF чека) */
   @Post('payments')
   @UseInterceptors(FileInterceptor('receipt', RECEIPT_LIMIT))
   create(
     @CurrentUser() user: User,
-    @Body() body: { lessonId: string; note?: string },
+    @Body() body: { lessonId: string; date?: string; note?: string },
     @UploadedFile() receipt?: Express.Multer.File,
   ) {
-    return this.payments.createForLesson(user, Number(body.lessonId), receipt, body.note);
+    return this.payments.createForLesson(user, Number(body.lessonId), body.date, receipt, body.note);
   }
 
   /** Пожертвование в фонд Hayriya (teacherId, amount, receipt) */

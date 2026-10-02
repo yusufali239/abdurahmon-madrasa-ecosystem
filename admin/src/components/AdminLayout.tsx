@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { BookMarked, CreditCard, GraduationCap, HandHeart, LayoutDashboard, LogOut, Menu, Newspaper, Shapes, Users, X } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Logo } from '@shared/ui/logo';
+import { ThemeToggle } from '@shared/ui/theme-toggle';
 import { cn } from '@shared/lib/utils';
 import { api, setToken } from '@/lib/api';
 
@@ -49,7 +50,8 @@ export function AdminLayout() {
           </NavLink>
         );
       })}
-      <button onClick={logout} className="mt-auto flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-muted-foreground hover:bg-muted">
+      <ThemeToggle className="mt-auto self-start" />
+      <button onClick={logout} className="mt-2 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-muted-foreground hover:bg-muted">
         <LogOut className="size-[18px]" /> Chiqish
       </button>
     </nav>

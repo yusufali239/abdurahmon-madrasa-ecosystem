@@ -16,7 +16,7 @@ export function PdfGrid({ items, onLocked }: { items: ContentItem[]; onLocked?: 
         >
           <div
             className={cn(
-              'relative aspect-[3/4] overflow-hidden rounded-2xl border shadow-soft transition group-active:scale-[.98]',
+              'relative aspect-[3/4] overflow-hidden rounded-2xl border transition group-active:scale-[.98]',
               i % 2 ? 'bg-gradient-to-br from-[#0B5E46] to-[#0E7A5A]' : 'bg-gradient-to-br from-[#8A6A2F] to-[#C4A15A]',
             )}
           >

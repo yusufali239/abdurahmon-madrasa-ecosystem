@@ -17,7 +17,7 @@ function useBotUsername() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="ornament flex min-h-screen flex-col items-center justify-center px-6 text-center">
-      <div className="w-full max-w-sm rounded-3xl border bg-card/95 p-7 shadow-soft backdrop-blur">{children}</div>
+      <div className="w-full max-w-sm rounded-3xl border bg-card/95 p-7 backdrop-blur">{children}</div>
     </div>
   );
 }
@@ -39,7 +39,7 @@ export function GateScreen({ kind, me, message }: { kind: 'loading' | 'unregiste
       {kind === 'unregistered' && (
         <>
           <UserPlus className="mx-auto mb-2 size-6 text-gold" />
-          <h1 className="text-xl font-extrabold">Avval ro'yxatdan o'ting</h1>
+          <h1 className="text-xl font-semibold">Avval ro'yxatdan o'ting</h1>
           <p className="mt-2 text-sm text-muted-foreground">Botda /start bosing: pasport, telefon va ismingizni yuboring. Admin tasdiqlagach ilova ochiladi.</p>
           <Button className="mt-6 w-full" onClick={openBot}>
             Botni ochish
@@ -49,7 +49,7 @@ export function GateScreen({ kind, me, message }: { kind: 'loading' | 'unregiste
       {kind === 'pending' && (
         <>
           <Clock className="mx-auto mb-2 size-6 text-gold" />
-          <h1 className="text-xl font-extrabold">
+          <h1 className="text-xl font-semibold">
             {me?.status === 'REJECTED' ? 'Ariza rad etildi' : me?.status === 'BLOCKED' ? 'Hisob bloklangan' : 'Arizangiz ko\'rib chiqilmoqda'}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -65,7 +65,7 @@ export function GateScreen({ kind, me, message }: { kind: 'loading' | 'unregiste
       {kind === 'error' && (
         <>
           <ShieldAlert className="mx-auto mb-2 size-6 text-destructive" />
-          <h1 className="text-xl font-extrabold">Xatolik</h1>
+          <h1 className="text-xl font-semibold">Xatolik</h1>
           <p className="mt-2 text-sm text-muted-foreground">{message}</p>
           <Button className="mt-6 w-full" onClick={() => location.reload()}>
             Qayta urinish
@@ -95,7 +95,7 @@ export function DevLogin() {
   return (
     <Shell>
       <Logo className="mx-auto mb-5 justify-center text-left" />
-      <h1 className="text-lg font-extrabold">Telegram orqali oching</h1>
+      <h1 className="text-lg font-semibold">Telegram orqali oching</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">Ilova Telegram botidagi «📱 Madrasa ilovasi» tugmasi orqali ishlaydi.</p>
       <Button className="mt-5 w-full" onClick={() => openLink(`https://t.me/${BOT}`)}>
         @{BOT}

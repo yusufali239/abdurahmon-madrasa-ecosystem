@@ -63,7 +63,7 @@ export function AudioPlayer({ url, title }: { url: string; title: string }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-card p-3.5 shadow-soft">
+    <div className="rounded-2xl border bg-card p-3.5">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="line-clamp-1 text-sm font-bold">{title}</p>
         <button onClick={cycleSpeed} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-bold text-muted-foreground">
@@ -75,7 +75,7 @@ export function AudioPlayer({ url, title }: { url: string; title: string }) {
           onClick={() => ws.current?.playPause()}
           disabled={!ready}
           className={cn(
-            'grid size-12 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-soft transition active:scale-95 disabled:opacity-60',
+            'grid size-12 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition active:scale-95 disabled:opacity-60',
             playing && 'ring-4 ring-primary/15',
           )}
           aria-label={playing ? 'Pauza' : 'Ijro etish'}

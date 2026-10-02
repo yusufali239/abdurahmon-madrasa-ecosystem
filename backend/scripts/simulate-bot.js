@@ -89,14 +89,14 @@ function check(cond, label) {
   const sardor = await prisma.user.findUnique({ where: { telegramId: 100000010n }, include: { teacher: true } });
   const fiqh = await prisma.lesson.findFirst({ where: { teacherId: sardor.teacher.id, bookTitle: 'Muxtasar al-Quduriy' } });
   const today = sessions.now();
-  const origDay = fiqh.weekDay;
-  await prisma.lesson.update({ where: { id: fiqh.id }, data: { weekDay: today.weekDay } });
+  const origDays = fiqh.weekDays;
+  await prisma.lesson.update({ where: { id: fiqh.id }, data: { weekDays: [today.weekDay] } });
   await prisma.lessonSession.deleteMany({ where: { lessonId: fiqh.id } });
   await prisma.enrollment.create({ data: { lessonId: fiqh.id, studentId: u.id } });
 
   const res = await sessions.runDailyConfirmation();
   check(res.lessons >= 1, `08:00 cron: ${res.lessons} ta dars topildi`);
-  check(/darsingiz bo'ladimi\? 56-bet Halol va harom/.test(lastSent(100000010)), 'ustozga savol: "Bugun ... darsingiz bo\'ladimi? 56-bet Halol va harom"');
+  check(/darsingiz bo'ladimi\? 56-betdan · Halol va harom/.test(lastSent(100000010)), 'ustozga savol: "Bugun ... darsingiz bo\'ladimi? 56-betdan · Halol va harom"');
   console.log('   ' + lastSent(100000010).split('\n').slice(0, 3).join('\n   '));
 
   const session = await prisma.lessonSession.findFirst({ where: { lessonId: fiqh.id } });
@@ -120,7 +120,7 @@ function check(cond, label) {
   await prisma.lessonSession.update({ where: { id: session.id }, data: { reminderSentAt: null, startsAt: new Date(Date.now() + 60 * 60 * 1000) } });
   const due = await sessions.sendDueReminders();
   await sleep(1500);
-  check(due === 1 && /Eslatma/.test(lastSent(U)) && /56–72-bet/.test(lastSent(U)), 'eslatma (2s30d oldin) bet va mavzu bilan');
+  check(due === 1 && /Eslatma/.test(lastSent(U)) && /56-betdan/.test(lastSent(U)) && /Halol va harom/.test(lastSent(U)), 'eslatma (2s30d oldin) bet va mavzu bilan');
 
   // Посещаемость
   await bot.handleUpdate(cb(100000010, `att:s:${session.id}`));
@@ -129,12 +129,33 @@ function check(cond, label) {
   await bot.handleUpdate(cb(100000010, `att:done:${session.id}`));
   const att = await prisma.attendance.findMany({ where: { sessionId: session.id } });
   check(att.length >= 1 && att.find((a) => a.studentId === u.id)?.status === 'PRESENT', 'davomat saqlandi');
-  await bot.handleUpdate(cb(100000010, `adv:${fiqh.id}`));
+  check(/Qaysi betgacha/.test(lastSent(100000010)), 'davomatdan keyin: "Qaysi betgacha o\'qildi?"');
+  await bot.handleUpdate(cb(100000010, 'pend:cancel'));
+
+  // ▶ Boshlash -> ⏹ Yakunlash: bet + keyingi mavzu
+  await bot.handleUpdate(cb(100000010, `ls:start:${session.id}`));
+  check(/Dars boshlandi/.test(lastSent(100000010)) && /56-betdan/.test(lastSent(100000010)), '▶ dars boshlandi (56-betdan)');
+  await bot.handleUpdate(cb(100000010, `ls:finish:${session.id}`));
+  await bot.handleUpdate(text(100000010, '72'));
+  check(/Keyingi darsning mavzusi/.test(lastSent(100000010)), '⏹ bet so\'raldi -> keyingi mavzu so\'raldi');
+  await bot.handleUpdate(text(100000010, 'Savdo odoblari'));
   const adv = await prisma.lesson.findUnique({ where: { id: fiqh.id } });
-  check(adv.currentPageFrom === 73 && adv.currentPageTo === 89 && adv.topic === 'Savdo odoblari', `kitob progressi: ${adv.currentPageFrom}–${adv.currentPageTo}-bet «${adv.topic}»`);
+  const done = await prisma.lessonSession.findUnique({ where: { id: session.id } });
+  check(done.status === 'DONE' && done.pageFrom === 56 && done.pageTo === 72, `sessiya: ${done.pageFrom}–${done.pageTo}-bet, ${done.status}`);
+  check(adv.currentPage === 73 && adv.topic === 'Savdo odoblari', `keyingi dars: ${adv.currentPage}-betdan «${adv.topic}»`);
+
+  // Davom etayotgan kitob: bet noma'lum bo'lsa, boshlashda so'raladi
+  await prisma.lesson.update({ where: { id: fiqh.id }, data: { currentPage: null } });
+  await prisma.lessonSession.deleteMany({ where: { lessonId: fiqh.id } });
+  const s3 = await sessions.ensureSession(fiqh.id, today);
+  await bot.handleUpdate(cb(100000010, `ls:start:${s3.id}`));
+  check(/qaysi betdan/.test(lastSent(100000010)), 'davom etayotgan kitob: "qaysi betdan?" so\'raldi');
+  await bot.handleUpdate(text(100000010, '120'));
+  const s3b = await prisma.lessonSession.findUnique({ where: { id: s3.id } });
+  check(s3b.status === 'STARTED' && s3b.pageFrom === 120, 'dars 120-betdan boshlandi');
 
   // Откат демо-данных
-  await prisma.lesson.update({ where: { id: fiqh.id }, data: { weekDay: origDay, currentPageFrom: 56, currentPageTo: 72, topic: 'Halol va harom', nextTopic: 'Savdo odoblari' } });
+  await prisma.lesson.update({ where: { id: fiqh.id }, data: { weekDays: origDays, currentPage: 56, topic: 'Halol va harom' } });
   await prisma.lessonSession.deleteMany({ where: { lessonId: fiqh.id } });
   await prisma.user.deleteMany({ where: { telegramId: BigInt(U) } });
   await app.close();

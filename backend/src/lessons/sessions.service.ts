@@ -9,7 +9,7 @@ import { dateOnly, formatHHmm, weekDayName, ZonedParts, zonedParts } from '../co
 import { AppConfig } from '../config/app-config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../queue/notifications.service';
-import { lessonCard } from './lesson-format';
+import { lessonCard, pageTopicLine } from './lesson-format';
 import { LessonsService } from './lessons.service';
 
 /** Напоминание за 2 часа 30 минут до начала */
@@ -73,8 +73,8 @@ export class SessionsService {
         lessonId,
         date,
         startsAt,
-        pageFrom: lesson.currentPageFrom,
-        pageTo: lesson.currentPageTo,
+        // Страница начала известна заранее (новая книга / после прошлого урока) или спросим при старте
+        pageFrom: lesson.currentPage,
         topic: lesson.topic,
       },
       include: SESSION_INCLUDE,
@@ -94,7 +94,7 @@ export class SessionsService {
   async runDailyConfirmation() {
     const today = this.now();
     const lessons = await this.prisma.lesson.findMany({
-      where: { isContinuous: true, isActive: true, weekDay: today.weekDay },
+      where: { isContinuous: true, isActive: true, weekDays: { has: today.weekDay } },
       select: { id: true, teacherId: true },
     });
     const teacherIds = new Set<number>();
@@ -125,9 +125,10 @@ export class SessionsService {
     const blocks = sessions.map((s, i) => {
       const n = sessions.length > 1 ? `${i + 1}. ` : '';
       kb.text(`✅ ${n}Ha, bo'ladi`, `ls:yes:${s.id}`).text(`❌ ${n}Yo'q`, `ls:no:${s.id}`).row();
+      const pt = pageTopicLine(s.pageFrom, s.topic);
       return (
-        `${n}<b>Bugun ${weekDayName(s.lesson.weekDay)} darsingiz bo'ladimi? ${s.pageFrom}-bet ${esc(s.topic)}</b>\n\n` +
-        lessonCard(s.lesson, { startsAt: s.startsAt, pageFrom: s.pageFrom, pageTo: s.pageTo, topic: s.topic })
+        `${n}<b>Bugun ${weekDayName(this.now().weekDay)} darsingiz bo'ladimi?${pt ? ` ${pt}` : ''}</b>\n\n` +
+        lessonCard(s.lesson, { startsAt: s.startsAt, page: s.pageFrom, topic: s.topic })
       );
     });
     await this.messenger.send(
@@ -176,8 +177,8 @@ export class SessionsService {
     const chatIds = await this.studentChatIds(s.lessonId);
     await this.notifications.sendMany(
       chatIds,
-      `✅ <b>Bugun dars bor: ${updated.pageFrom}-bet</b>\n\n` +
-        lessonCard(updated.lesson, { startsAt: updated.startsAt, pageFrom: updated.pageFrom, pageTo: updated.pageTo, topic: updated.topic }),
+      `✅ <b>Bugun dars bor${updated.pageFrom ? `: ${updated.pageFrom}-betdan` : ''}</b>\n\n` +
+        lessonCard(updated.lesson, { startsAt: updated.startsAt, page: updated.pageFrom, topic: updated.topic }),
       { reply_markup: this.studentKeyboard(updated) },
     );
     await this.scheduleReminder(updated);
@@ -199,8 +200,8 @@ export class SessionsService {
     await this.notifications.sendMany(
       chatIds,
       `❌ <b>Bugun dars bekor qilindi.</b>\nSabab: ${esc(clean)}\n\n` +
-        `📘 ${esc(s.lesson.subject.name)} — ${esc(s.lesson.teacher.user.fullName)}\n` +
-        `📖 ${s.pageFrom}-bet «${esc(s.topic)}» keyingi darsda o'tiladi.`,
+        `📘 ${esc(s.lesson.subject.name)} — ${esc(s.lesson.teacher.user.fullName)}` +
+        (s.pageFrom || s.topic ? `\n📖 ${pageTopicLine(s.pageFrom, s.topic)} keyingi darsda o'tiladi.` : ''),
       { reply_markup: new InlineKeyboard().text('⬅️ Bosh menyu', 'menu:home') },
     );
     return { session: updated, notified: chatIds.length };
@@ -225,8 +226,10 @@ export class SessionsService {
     const startText = s.startsAt ? formatHHmm(s.startsAt, this.cfg.timezone) : s.lesson.startTime;
     const text =
       `⏰ <b>Eslatma: dars ${startText} da boshlanadi</b>\n\n` +
-      `📖 Bugun: <b>${s.pageFrom}–${s.pageTo}-bet</b>\n📝 Mavzu: <b>${esc(s.topic)}</b>\n\n` +
-      lessonCard(s.lesson, { startsAt: s.startsAt, pageFrom: s.pageFrom, pageTo: s.pageTo, topic: s.topic });
+      (s.pageFrom ? `📖 Bugun: <b>${s.pageFrom}-betdan</b>\n` : '') +
+      (s.topic ? `📝 Mavzu: <b>${esc(s.topic)}</b>\n` : '') +
+      `\n` +
+      lessonCard(s.lesson, { startsAt: s.startsAt, page: s.pageFrom, topic: s.topic });
     const chatIds = await this.studentChatIds(s.lessonId);
     await this.notifications.sendMany([...chatIds, s.lesson.teacher.user.telegramId], text, {
       reply_markup: this.studentKeyboard(s),
@@ -305,17 +308,61 @@ export class SessionsService {
     if (unmarked.length) await this.setAttendance(sessionId, unmarked, teacherUserId);
   }
 
-  /** Завершить занятие: неотмеченные -> «Kelmadi», статус DONE */
-  async finish(sessionId: number, teacherUserId?: number) {
+  /** Сохранить посещаемость: неотмеченные -> «Kelmadi» */
+  async finalizeAttendance(sessionId: number, teacherUserId?: number) {
     const { items, session } = await this.attendance(sessionId);
     await this.assertTeacher(session, teacherUserId);
     const unmarked = items.filter((i) => !i.status).map((i) => ({ studentId: i.student.id, status: 'ABSENT' as const }));
     if (unmarked.length) await this.setAttendance(sessionId, unmarked, teacherUserId);
+    return this.get(sessionId);
+  }
+
+  /**
+   * ▶ Начать урок. Если страница начала неизвестна (продолжающаяся книга) — её нужно указать.
+   */
+  async start(sessionId: number, dto: { pageFrom?: number; topic?: string }, teacherUserId?: number) {
+    const s = await this.get(sessionId);
+    await this.assertTeacher(s, teacherUserId);
+    if (s.status === 'CANCELLED') throw new BadRequestException('Dars bekor qilingan');
+    if (s.status === 'DONE') throw new BadRequestException('Dars allaqachon yakunlangan');
+    const pageFrom = dto.pageFrom ?? s.pageFrom ?? s.lesson.currentPage;
+    if (!pageFrom) throw new BadRequestException('Qaysi betdan boshlayotganingizni yozing');
+    if (pageFrom > s.lesson.bookTotalPages) throw new BadRequestException(`Kitobda ${s.lesson.bookTotalPages} bet bor`);
+    const topic = dto.topic?.trim() || s.topic || s.lesson.topic || null;
     return this.prisma.lessonSession.update({
       where: { id: sessionId },
-      data: { status: 'DONE', finishedAt: new Date() },
+      data: { status: 'STARTED', startedAt: new Date(), pageFrom, topic },
       include: SESSION_INCLUDE,
     });
+  }
+
+  /**
+   * ⏹ Закончить урок: до какой страницы дошли + тема следующего урока.
+   * Следующий урок начнётся со следующей страницы.
+   */
+  async finish(sessionId: number, dto: { pageTo: number; nextTopic?: string }, teacherUserId?: number) {
+    const s = await this.get(sessionId);
+    await this.assertTeacher(s, teacherUserId);
+    if (s.status === 'CANCELLED') throw new BadRequestException('Dars bekor qilingan');
+    const total = s.lesson.bookTotalPages;
+    const pageFrom = s.pageFrom ?? s.lesson.currentPage;
+    if (!Number.isInteger(dto.pageTo) || dto.pageTo < 1) throw new BadRequestException('Betni to\'g\'ri yozing');
+    if (dto.pageTo > total) throw new BadRequestException(`Kitobda ${total} bet bor`);
+    if (pageFrom && dto.pageTo < pageFrom) throw new BadRequestException(`Dars ${pageFrom}-betdan boshlangan`);
+    await this.finalizeAttendance(sessionId, teacherUserId);
+    const nextTopic = dto.nextTopic?.trim() || null;
+    const [session] = await this.prisma.$transaction([
+      this.prisma.lessonSession.update({
+        where: { id: sessionId },
+        data: { status: 'DONE', finishedAt: new Date(), pageTo: dto.pageTo, pageFrom: pageFrom ?? dto.pageTo, startedAt: s.startedAt ?? new Date() },
+        include: SESSION_INCLUDE,
+      }),
+      this.prisma.lesson.update({
+        where: { id: s.lessonId },
+        data: { currentPage: Math.min(dto.pageTo + 1, total), topic: nextTopic },
+      }),
+    ]);
+    return session;
   }
 
   /** Занятия учителя: сегодня + последние (для меню «Davomat») */
@@ -325,12 +372,16 @@ export class SessionsService {
     // Гарантируем наличие занятий на сегодня
     const today = this.now();
     const todayLessons = await this.prisma.lesson.findMany({
-      where: { teacherId: teacher.id, weekDay: today.weekDay, isActive: true },
+      where: { teacherId: teacher.id, weekDays: { has: today.weekDay }, isActive: true },
       select: { id: true },
     });
     for (const l of todayLessons) await this.ensureSession(l.id, today);
     return this.prisma.lessonSession.findMany({
-      where: { lesson: { teacherId: teacher.id }, date: { lte: dateOnly(today) } },
+      // Сегодняшние + прошедшие, которые действительно были (начаты/завершены/отменены)
+      where: {
+        lesson: { teacherId: teacher.id },
+        OR: [{ date: dateOnly(today) }, { date: { lt: dateOnly(today) }, status: { in: ['STARTED', 'DONE', 'CANCELLED'] } }],
+      },
       include: { ...SESSION_INCLUDE, _count: { select: { attendances: true } } },
       orderBy: [{ date: 'desc' }, { startsAt: 'asc' }],
       take: 8,

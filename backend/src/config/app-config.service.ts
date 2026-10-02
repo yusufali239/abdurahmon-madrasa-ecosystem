@@ -83,6 +83,10 @@ export class AppConfig {
   get hayriyaMbankNumber() {
     return this.str('HAYRIYA_MBANK_NUMBER', '+996700000000');
   }
+  /** Необязательная ссылка на перевод в MBank для фонда */
+  get hayriyaMbankLink() {
+    return this.str('HAYRIYA_MBANK_LINK');
+  }
   get hayriyaRecipientName() {
     return this.str('HAYRIYA_RECIPIENT_NAME', 'Abdurahmon ibn Avf madrasasi');
   }

@@ -13,6 +13,12 @@ export class UpdateTeacherProfileDto {
   @Matches(PHONE_RE, { message: 'MBank raqami noto\'g\'ri' })
   mbankNumber?: string;
 
+  /** Необязательная ссылка на перевод в MBank */
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  mbankLink?: string;
+
   @IsOptional()
   @IsString()
   @Length(0, 1000)

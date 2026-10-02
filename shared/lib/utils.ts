@@ -40,3 +40,13 @@ export const PAYMENT_STATUS: Record<string, { label: string; tone: 'gold' | 'gre
 };
 
 export const MAP_PROVIDERS: Record<string, string> = { TWOGIS: '2GIS', YANDEX: 'Yandex', GOOGLE: 'Google' };
+
+/** [1, 4] -> "Du, Pa" (или полные названия) */
+export function daysText(days: number[] = [], full = false) {
+  return [...days].sort((a, b) => a - b).map((d) => (full ? WEEKDAYS[d] : WEEKDAYS_SHORT[d])).join(', ');
+}
+
+/** «56-betdan · Halol va harom» */
+export function pageTopic(page?: number | null, topic?: string | null) {
+  return [page ? `${page}-betdan` : null, topic || null].filter(Boolean).join(' · ');
+}

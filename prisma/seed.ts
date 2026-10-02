@@ -13,11 +13,9 @@ import { PrismaClient, Prisma } from '@prisma/client';
 const prisma = new PrismaClient();
 
 const TZ = 'Asia/Bishkek';
-function currentPeriod(): string {
-  const p = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit' }).formatToParts(new Date());
-  const y = p.find((x) => x.type === 'year')!.value;
-  const m = p.find((x) => x.type === 'month')!.value;
-  return `${y}-${m}`;
+/** Сегодняшняя дата "YYYY-MM-DD" в Бишкеке — оплата идёт за день урока */
+function todayKey(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
 const SUBJECTS = [
@@ -152,15 +150,15 @@ async function main() {
       subjectId: subjects['fiqh'],
       locationId: masjid.id,
       isContinuous: true,
-      weekDay: 4, // Payshanba
+      weekDays: [4], // Payshanba
       startTime: 'Shomdan keyin',
       endTime: '22:00 gacha',
       bookTitle: 'Muxtasar al-Quduriy',
       bookTotalPages: 200,
-      currentPageFrom: 56,
-      currentPageTo: 72,
+      // Книга уже читается: следующий урок — с 56-й страницы, тема «Halol va harom»
+      isNewBook: false,
+      currentPage: 56,
       topic: 'Halol va harom',
-      nextTopic: 'Savdo odoblari',
       priceTier: 100,
       paymentType: 'MBANK_SELF',
       isActive: true,
@@ -169,27 +167,27 @@ async function main() {
 
   const otherLessons: Prisma.LessonUncheckedCreateInput[] = [
     {
-      teacherId: abdulloh.id, subjectId: subjects['aqida'], locationId: abdullohLoc.id, weekDay: 2,
+      teacherId: abdulloh.id, subjectId: subjects['aqida'], locationId: abdullohLoc.id, weekDays: [2],
       startTime: 'Asrdan keyin', endTime: '18:00 gacha', bookTitle: 'Aqidatut-Tahoviya', bookTotalPages: 120,
-      currentPageFrom: 14, currentPageTo: 22, topic: 'Iymon arkonlari', nextTopic: 'Farishtalarga iymon',
+      isNewBook: false, currentPage: 14, topic: 'Iymon arkonlari',
       priceTier: 50, paymentType: 'HAYRIYA',
     },
     {
-      teacherId: muhammad.id, subjectId: subjects['arab-tili'], locationId: muhammadLoc.id, weekDay: 1,
+      teacherId: muhammad.id, subjectId: subjects['arab-tili'], locationId: muhammadLoc.id, weekDays: [1, 3, 5],
       startTime: '18:30', startClock: '18:30', endTime: '20:00 gacha', bookTitle: 'Al-Arabiyya bayna yadayk, 1-jild', bookTotalPages: 320,
-      currentPageFrom: 101, currentPageTo: 110, topic: 'Fe\'lning o\'tgan zamoni', nextTopic: 'Hozirgi-kelasi zamon',
+      isNewBook: false, currentPage: 101, topic: 'Fe\'lning o\'tgan zamoni',
       priceTier: 200, paymentType: 'MBANK_SELF',
     },
     {
-      teacherId: muhammad.id, subjectId: subjects['quron'], locationId: muhammadLoc.id, weekDay: 6,
+      teacherId: muhammad.id, subjectId: subjects['quron'], locationId: muhammadLoc.id, weekDays: [6],
       startTime: 'Bomdoddan keyin', endTime: '08:00 gacha', bookTitle: 'Tajvid qoidalari', bookTotalPages: 90,
-      currentPageFrom: 30, currentPageTo: 36, topic: 'Nun sokin va tanvin', nextTopic: 'Mim sokin',
+      isNewBook: false, currentPage: 30, topic: 'Nun sokin va tanvin',
       priceTier: 100, customPrice: 150, paymentType: 'HAYRIYA',
     },
     {
-      teacherId: sardor.id, subjectId: subjects['hadis'], locationId: masjid.id, weekDay: 5,
+      teacherId: sardor.id, subjectId: subjects['hadis'], locationId: masjid.id, weekDays: [5],
       startTime: 'Juma namozidan keyin', startClock: '14:00', endTime: '15:30 gacha', bookTitle: 'Arbain an-Navaviy', bookTotalPages: 80,
-      currentPageFrom: 9, currentPageTo: 12, topic: 'Niyat haqidagi hadis', nextTopic: 'Jabroil hadisi',
+      isNewBook: false, currentPage: 9, topic: 'Niyat haqidagi hadis',
       priceTier: 0, paymentType: 'HAYRIYA',
     },
   ];
@@ -233,7 +231,7 @@ async function main() {
     await prisma.enrollment.create({ data: { lessonId: aqida.id, studentId: st.id } });
   }
 
-  const period = currentPeriod();
+  const period = todayKey();
   // Подтверждённая оплата MBank (Azizbek) и ожидающая (Bilol)
   await prisma.payment.create({
     data: { studentId: students[0].id, teacherId: sardor.id, lessonId: fiqh.id, amount: 100, paymentType: 'MBANK_SELF', status: 'CONFIRMED', period, confirmedAt: new Date() },
@@ -295,7 +293,7 @@ async function main() {
 
   const global = await prisma.donationFund.aggregate({ _sum: { personalTotal: true } });
   console.log('✅ Seed tayyor:');
-  console.log(`   Sardor domla — Fiqh, Payshanba, Shomdan keyin – 22:00 gacha, 56–72-bet «Halol va harom», 200 bet, 100 som`);
+  console.log(`   Sardor domla — Fiqh, Payshanba, Shomdan keyin – 22:00 gacha, 56-betdan «Halol va harom», 200 bet, 100 som / dars`);
   console.log(`   Hayriya: Sardor domla hissasi 3270 som, umumiy jamg'arma ${global._sum.personalTotal} som`);
 }
 

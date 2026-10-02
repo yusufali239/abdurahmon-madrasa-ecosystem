@@ -76,6 +76,7 @@ enum DonationStatus {
 enum SessionStatus {
   SCHEDULED
   CONFIRMED
+  STARTED
   CANCELLED
   DONE
 }
@@ -132,6 +133,8 @@ model Teacher {
   // Отдельные поля, учитель редактирует их сам
   telegramPhone String
   mbankNumber   String
+  // Необязательная ссылка на перевод в MBank (если у учителя есть своя ссылка)
+  mbankLink     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -181,8 +184,8 @@ model Lesson {
   locationId      Int?
   location        TeacherLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   isContinuous    Boolean     @default(true)
-  // 1 = Dushanba ... 7 = Yakshanba
-  weekDay         Int
+  // Дни недели: 1 = Dushanba ... 7 = Yakshanba (можно несколько)
+  weekDays        Int[]
   // Текстовое время: "Shomdan keyin", "18:30"
   startTime       String
   endTime         String
@@ -190,13 +193,15 @@ model Lesson {
   startClock      String?
   bookTitle       String
   bookTotalPages  Int
-  currentPageFrom Int
-  currentPageTo   Int
-  topic           String
-  nextTopic       String?
-  // 0 | 50 | 100 | 200
+  // true — книга начинается с 1-й страницы; false — книга уже читается (страницу спросим при старте урока)
+  isNewBook       Boolean     @default(true)
+  // Страница, с которой начнётся следующий урок. null — неизвестно (продолжающаяся книга)
+  currentPage     Int?
+  // Тема следующего урока (вводится учителем после урока)
+  topic           String?
+  // Цена за ОДИН день урока: 0 | 50 | 100 | 200
   priceTier       Int         @default(0)
-  // Персональная цена (перекрывает priceTier)
+  // Персональная цена за день (перекрывает priceTier)
   customPrice     Int?
   paymentType     PaymentType @default(MBANK_SELF)
   isActive        Boolean     @default(true)
@@ -209,7 +214,7 @@ model Lesson {
   payments    Payment[]
   grades      Grade[]
 
-  @@index([weekDay, isActive])
+  @@index([isActive])
 }
 
 // Экземпляр урока на конкретную дату (подтверждение, отмена, напоминание, посещаемость)
@@ -220,12 +225,14 @@ model LessonSession {
   date           DateTime      @db.Date
   status         SessionStatus @default(SCHEDULED)
   startsAt       DateTime?
-  pageFrom       Int
-  pageTo         Int
-  topic          String
+  // Страницы фактически прочитанного (заполняются при старте/окончании урока)
+  pageFrom       Int?
+  pageTo         Int?
+  topic          String?
   cancelReason   String?
   askedAt        DateTime?
   confirmedAt    DateTime?
+  startedAt      DateTime?
   reminderSentAt DateTime?
   finishedAt     DateTime?
   createdAt      DateTime      @default(now())
@@ -310,7 +317,7 @@ model Payment {
   paymentType PaymentType
   status      PaymentStatus @default(PENDING)
   receipt_url String?
-  // Оплачиваемый период "YYYY-MM"
+  // Оплачиваемый день урока "YYYY-MM-DD"
   period      String?
   note        String?
   confirmedAt DateTime?
