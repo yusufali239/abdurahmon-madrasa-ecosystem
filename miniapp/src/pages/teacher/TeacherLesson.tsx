@@ -8,12 +8,11 @@ import { Field, Input, Select, Textarea } from '@shared/ui/input';
 import { EMPTY_LESSON, LessonForm, lessonFormMissing, lessonPayload, lessonToForm, type LessonFormValue } from '@shared/ui/lesson-form';
 import { Switch } from '@shared/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
-import { cn, dateUz, pageTopic } from '@shared/lib/utils';
+import { cn, dateUz } from '@shared/lib/utils';
 import { api } from '@/lib/api';
 import { haptic } from '@/lib/telegram';
 import type { LessonDetail, Location, Subject } from '@/lib/types';
 import { BookProgress, ErrorBox, ListSkeleton, PageHeader } from '@/components/common';
-import { FinishButton, StartButton, type TeacherSession } from '@/components/SessionControls';
 
 const TYPE_ICON = { AUDIO: Headphones, VIDEO: Video, PDF: FileText };
 
@@ -74,7 +73,7 @@ function ContentTab({ lesson }: { lesson: LessonDetail }) {
           <span className="min-w-0 flex-1 truncate text-sm font-semibold">{file ? file.name : 'Fayl tanlash (mp3, mp4, pdf)'}</span>
           <input type="file" className="sr-only" accept="audio/*,video/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         </label>
-        <Field label="yoki havola" hint="YouTube yoki to'g'ridan-to'g'ri fayl havolasi">
+        <Field label="yoki havola">
           <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." />
         </Field>
         <Switch checked={isFree} onChange={setIsFree} label="Bepul (hamma ko'ra oladi)" />
@@ -173,30 +172,6 @@ function GradesTab({ lessonId }: { lessonId: number }) {
   );
 }
 
-/** Сегодняшнее занятие урока: ▶ начать / ⏹ закончить */
-function TodaySession({ lessonId }: { lessonId: number }) {
-  const s = useQuery({
-    queryKey: ['sessions', 'today', lessonId],
-    queryFn: () => api<TeacherSession>(`/lessons/${lessonId}/sessions/today`, { method: 'POST' }),
-  });
-  if (!s.data) return null;
-  const x = s.data;
-  return (
-    <div className="mb-8 rounded-2xl border bg-card p-5">
-      <p className="text-sm text-muted-foreground">Bugungi dars</p>
-      <p className="mt-1 font-semibold">
-        {x.status === 'DONE'
-          ? `Yakunlandi: ${x.pageFrom}–${x.pageTo}-bet`
-          : x.status === 'CANCELLED'
-            ? 'Bekor qilingan'
-            : pageTopic(x.pageFrom ?? x.lesson.currentPage, x.topic ?? x.lesson.topic) || 'Betni boshlashda belgilaysiz'}
-      </p>
-      {(x.status === 'SCHEDULED' || x.status === 'CONFIRMED') && <StartButton session={x} className="mt-4 w-full" />}
-      {x.status === 'STARTED' && <FinishButton session={x} className="mt-4 w-full" />}
-    </div>
-  );
-}
-
 export default function TeacherLessonPage() {
   const { id } = useParams();
   const isNew = id === 'new';
@@ -207,7 +182,6 @@ export default function TeacherLessonPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api<Subject[]>('/subjects') });
   const teacher = useQuery({ queryKey: ['teacher-me'], queryFn: () => api<{ locations: Location[] }>('/teachers/me') });
-  const today = useQuery({ queryKey: ['today'], queryFn: () => api<{ weekDay: number }>('/meta/today') });
   const lesson = useQuery({ queryKey: ['lesson', lessonId], queryFn: () => api<LessonDetail>(`/lessons/${lessonId}`), enabled: !isNew });
 
   useEffect(() => {
@@ -250,7 +224,6 @@ export default function TeacherLessonPage() {
         formNode
       ) : (
         <>
-          {l && today.data && l.weekDays.includes(today.data.weekDay) && <TodaySession lessonId={lessonId} />}
           {l && (
             <div className="mb-8">
               <BookProgress done={l.pagesDone} total={l.bookTotalPages} />

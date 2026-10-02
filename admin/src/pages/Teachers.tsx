@@ -27,6 +27,7 @@ export default function TeachersPage() {
     mutationFn: (teacherId: number) => api(`/admin/teachers/${teacherId}/locations`, { body: loc }),
     onSuccess: () => (refresh(), setLoc({ title: '', address: '', map_url: '' })),
   });
+  const delTeacher = useMutation({ mutationFn: (userId: number) => api(`/admin/users/${userId}`, { method: 'DELETE' }), onSuccess: refresh });
   const delLoc = useMutation({ mutationFn: (id: number) => api(`/admin/locations/${id}`, { method: 'DELETE' }), onSuccess: refresh });
 
   return (
@@ -40,9 +41,19 @@ export default function TeachersPage() {
                 <p className="text-lg font-extrabold">{t.user.fullName}</p>
                 <p className="text-xs text-muted-foreground">{t.subjects.map((s: any) => s.name).join(', ') || 'Fan biriktirilmagan'}</p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setEdit({ ...t, subjectIds: t.subjects.map((s: any) => s.id) })}>
-                <Pencil /> Tahrirlash
-              </Button>
+              <div className="flex gap-1">
+                <Button size="sm" variant="outline" onClick={() => setEdit({ ...t, subjectIds: t.subjects.map((s: any) => s.id) })}>
+                  <Pencil /> Tahrirlash
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title="O'chirish"
+                  onClick={() => confirm(`${t.user.fullName} va uning barcha darslari o'chirilsinmi?`) && delTeacher.mutate(t.user.id)}
+                >
+                  <Trash2 />
+                </Button>
+              </div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-xl bg-muted/60 p-3">

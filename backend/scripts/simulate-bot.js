@@ -99,6 +99,14 @@ function check(cond, label) {
   check(/darsingiz bo'ladimi\? 56-betdan · Halol va harom/.test(lastSent(100000010)), 'ustozga savol: "Bugun ... darsingiz bo\'ladimi? 56-betdan · Halol va harom"');
   console.log('   ' + lastSent(100000010).split('\n').slice(0, 3).join('\n   '));
 
+  // Qo'shimcha tekshiruv (har 5 daqiqa): allaqachon so'ralgan darsni qayta so'ramaydi
+  const again = await sessions.runDailyConfirmation({ catchUp: true });
+  check(again.teachers === 0, "qayta tekshiruv: takroriy so'rov yo'q");
+  // Server 08:00 dan keyin qayta ishga tushsa ham, so'ralmagan darslar uchun so'rov ketadi
+  await prisma.lessonSession.updateMany({ where: { lessonId: fiqh.id }, data: { askedAt: null } });
+  await bot.handleUpdate(cb(100000010, 'menu:home'));
+  const caught = await sessions.runDailyConfirmation({ catchUp: true });
+  check(caught.teachers >= 1 && /darsingiz bo'ladimi/.test(lastSent(100000010)), "o'tkazib yuborilgan 08:00 so'rovi qayta yuborildi");
   const session = await prisma.lessonSession.findFirst({ where: { lessonId: fiqh.id } });
   await bot.handleUpdate(cb(100000010, `ls:no:${session.id}`));
   check(/sababini yozing/.test(lastSent(100000010)), 'Yo\'q -> sabab so\'raldi');

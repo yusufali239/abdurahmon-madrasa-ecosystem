@@ -91,7 +91,7 @@ export class SessionsService {
    * CRON 08:00 (Asia/Bishkek): непрерывные уроки на сегодня -> вопрос учителю «Ha / Yo'q»,
    * планирование напоминаний.
    */
-  async runDailyConfirmation() {
+  async runDailyConfirmation(opts: { catchUp?: boolean } = {}) {
     const today = this.now();
     const lessons = await this.prisma.lesson.findMany({
       where: { isContinuous: true, isActive: true, weekDays: { has: today.weekDay } },
@@ -100,12 +100,25 @@ export class SessionsService {
     const teacherIds = new Set<number>();
     for (const l of lessons) {
       const session = await this.ensureSession(l.id, today);
-      if (session.status === 'SCHEDULED' && !session.askedAt) teacherIds.add(l.teacherId);
+      // Не спрашиваем про урок, который уже начался по времени
+      const notStarted = !session.startsAt || session.startsAt.getTime() > Date.now();
+      if (session.status === 'SCHEDULED' && !session.askedAt && notStarted) teacherIds.add(l.teacherId);
       await this.scheduleReminder(session);
     }
     for (const teacherId of teacherIds) await this.askTeacher(teacherId);
-    this.logger.log(`08:00 — ${lessons.length} ta dars, ${teacherIds.size} ta ustozga so'rov yuborildi`);
+    if (!opts.catchUp || teacherIds.size) {
+      this.logger.log(`${opts.catchUp ? 'Qo\'shimcha tekshiruv' : '08:00'} — ${lessons.length} ta dars, ${teacherIds.size} ta ustozga so'rov yuborildi`);
+    }
     return { lessons: lessons.length, teachers: teacherIds.size };
+  }
+
+  /**
+   * Подстраховка (каждые 5 минут после 08:00): если сервер перезапускался после 08:00
+   * или урок на сегодня создан позже — учитель всё равно получит вопрос «Ha / Yo'q».
+   */
+  async catchUpToday() {
+    if (this.now().hour < 8) return { lessons: 0, teachers: 0 };
+    return this.runDailyConfirmation({ catchUp: true });
   }
 
   /** Одно сообщение учителю со всеми неподтверждёнными уроками на сегодня */

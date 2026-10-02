@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { HandHeart, Infinity as InfinityIcon, Pencil, Plus, Wallet } from 'lucide-react';
+import { HandHeart, Infinity as InfinityIcon, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Dialog, DialogContent } from '@shared/ui/dialog';
@@ -42,6 +42,15 @@ function LessonDialog({ lesson, open, onOpenChange }: { lesson: any | null; open
     },
   });
   const d = detail.data;
+  const delSession = useMutation({ mutationFn: (id: number) => api(`/admin/sessions/${id}`, { method: 'DELETE' }), onSuccess: () => detail.refetch() });
+  const delGrade = useMutation({ mutationFn: (id: number) => api(`/admin/grades/${id}`, { method: 'DELETE' }), onSuccess: () => detail.refetch() });
+  const delLesson = useMutation({
+    mutationFn: () => api(`/admin/lessons/${lesson.id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-lessons'] });
+      onOpenChange(false);
+    },
+  });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl" title={lesson ? `${lesson.subject.name} — ${lesson.teacher.user.fullName}` : 'Yangi dars'}>
@@ -69,6 +78,16 @@ function LessonDialog({ lesson, open, onOpenChange }: { lesson: any | null; open
             <div className="mt-4">
               <ErrorBox error={formError ? new Error(formError) : save.error} />
             </div>
+            {lesson && (
+              <Button
+                variant="ghost"
+                className="mt-2 w-full text-destructive"
+                loading={delLesson.isPending}
+                onClick={() => confirm("Dars butunlay o'chirilsinmi? Mashg'ulotlar, materiallar va baholar ham o'chadi.") && delLesson.mutate()}
+              >
+                <Trash2 /> Darsni o'chirish
+              </Button>
+            )}
             <Button
               size="lg"
               className="mt-4 w-full"
@@ -96,7 +115,14 @@ function LessonDialog({ lesson, open, onOpenChange }: { lesson: any | null; open
               <div>
                 <p className="mb-1.5 font-bold">Mashg'ulotlar va davomat</p>
                 {d.sessions.map((s: any) => (
-                  <div key={s.id} className="mb-2 rounded-xl bg-muted/60 p-2.5">
+                  <div key={s.id} className="relative mb-2 rounded-xl bg-muted/60 p-2.5 pr-8">
+                    <button
+                      title="O'chirish"
+                      onClick={() => confirm("Mashg'ulot o'chirilsinmi?") && delSession.mutate(s.id)}
+                      className="absolute right-2 top-2.5 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
                     <p className="font-semibold">
                       {dateUz(s.date)} · {s.status}
                       {s.pageFrom ? ` · ${s.pageFrom}${s.pageTo ? `–${s.pageTo}` : ''}-bet` : ''}
@@ -109,8 +135,13 @@ function LessonDialog({ lesson, open, onOpenChange }: { lesson: any | null; open
               <div>
                 <p className="mb-1.5 font-bold">Baholar</p>
                 {d.grades.map((g: any) => (
-                  <p key={g.id} className="text-muted-foreground">
-                    {g.student.fullName}: <b className="text-foreground">{g.score}</b> {g.comment && `— ${g.comment}`}
+                  <p key={g.id} className="flex items-start justify-between gap-2 text-muted-foreground">
+                    <span>
+                      {g.student.fullName}: <b className="text-foreground">{g.score}</b> {g.comment && `— ${g.comment}`}
+                    </span>
+                    <button title="O'chirish" onClick={() => delGrade.mutate(g.id)} className="hover:text-destructive">
+                      <Trash2 className="size-3.5" />
+                    </button>
                   </p>
                 ))}
               </div>

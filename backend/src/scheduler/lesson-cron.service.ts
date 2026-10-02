@@ -19,10 +19,11 @@ export class LessonCronService {
     }
   }
 
-  /** Каждые 5 минут — подстраховка напоминаний за 2ч30м (если отложенная задача потерялась) */
+  /** Каждые 5 минут — подстраховка: пропущенный вопрос 08:00 и напоминания за 2ч30м */
   @Cron('*/5 * * * *', { name: 'reminder-safety-net', timeZone: 'Asia/Bishkek' })
   async reminders() {
     try {
+      await this.sessions.catchUpToday();
       const n = await this.sessions.sendDueReminders();
       if (n) this.logger.log(`${n} ta eslatma yuborildi (zaxira cron)`);
     } catch (e) {

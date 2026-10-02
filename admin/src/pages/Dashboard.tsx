@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { BookMarked, CalendarClock, CreditCard, GraduationCap, HandHeart, UserCheck, Users } from 'lucide-react';
+import { BookMarked, CalendarClock, CreditCard, GraduationCap, HandHeart, Trash2, UserCheck, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
@@ -18,6 +18,10 @@ const S: Record<string, { label: string; v: any }> = {
 export default function DashboardPage() {
   const q = useQuery({ queryKey: ['stats'], queryFn: () => api<any>('/admin/stats') });
   const cron = useMutation({ mutationFn: () => api('/admin/cron/daily-confirmation', { method: 'POST' }), onSuccess: () => q.refetch() });
+  const clearDemo = useMutation({
+    mutationFn: () => api<{ users: number; news: number; reports: number }>('/admin/demo/clear', { method: 'POST' }),
+    onSuccess: () => q.refetch(),
+  });
   const d = q.data;
   return (
     <div>
@@ -25,11 +29,26 @@ export default function DashboardPage() {
         title="Assalomu alaykum!"
         subtitle={d ? `Bugun ${WEEKDAYS[d.weekDay]} · Asia/Bishkek` : ''}
         action={
-          <Button variant="outline" loading={cron.isPending} onClick={() => cron.mutate()}>
-            <CalendarClock /> 08:00 tasdiqni hozir yuborish
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" loading={cron.isPending} onClick={() => cron.mutate()}>
+              <CalendarClock /> 08:00 tasdiqni hozir yuborish
+            </Button>
+            <Button
+              variant="ghost"
+              className="text-destructive"
+              loading={clearDemo.isPending}
+              onClick={() => confirm("Demo ma'lumotlar (Sardor domla, test talabalar, [Demo] yangiliklar) o'chirilsinmi?") && clearDemo.mutate()}
+            >
+              <Trash2 /> Demo ma'lumotlarni o'chirish
+            </Button>
+          </div>
         }
       />
+      {clearDemo.data && (
+        <p className="mb-4 rounded-xl bg-muted p-3 text-sm">
+          O'chirildi: {clearDemo.data.users} foydalanuvchi, {clearDemo.data.news} yangilik, {clearDemo.data.reports} hisobot.
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Talabalar" value={d?.students ?? '—'} icon={Users} />
         <Stat label="Ustozlar" value={d?.teachers ?? '—'} icon={GraduationCap} />

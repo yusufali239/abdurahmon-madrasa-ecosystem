@@ -34,7 +34,10 @@ export class MenuService {
   async show(user: User, isAdmin = false, notice?: string) {
     const now = zonedParts(new Date(), this.cfg.timezone);
     const prayers = computePrayerTimes(now.year, now.month, now.day);
-    const firstName = esc((user.fullName || '').split(' ').slice(-1)[0] || user.fullName || '');
+    const words = (user.fullName || '').split(' ');
+    const last = words[words.length - 1] || '';
+    // «Sardor domla» — обращаемся полностью, «Karimov Azizbek» — по имени
+    const firstName = esc(/^(domla|ustoz|aka|opa)$/i.test(last) ? user.fullName || '' : last);
 
     const lines: string[] = [];
     if (notice) lines.push(notice, '');

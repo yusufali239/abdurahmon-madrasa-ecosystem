@@ -5,7 +5,7 @@ import { Check, ChevronRight, GraduationCap, MapPin, Phone, Plus, Trash2, Wallet
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { Dialog, DialogContent } from '@shared/ui/dialog';
-import { Field, Input, Select, Textarea } from '@shared/ui/input';
+import { Field, Input, Textarea } from '@shared/ui/input';
 import { ThemeToggle } from '@shared/ui/theme-toggle';
 import { cn, dateUz, MAP_PROVIDERS, PAYMENT_STATUS, som } from '@shared/lib/utils';
 import { api, absUrl, setDevId } from '@/lib/api';
@@ -98,48 +98,34 @@ interface TeacherMe {
 
 function LocationDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ title: '', address: '', map_url: '', provider: 'TWOGIS', lat: '', lng: '' });
+  const [form, setForm] = useState({ title: '', address: '', map_url: '' });
   const save = useMutation({
     mutationFn: () =>
       api('/teachers/me/locations', {
-        body: { ...form, lat: form.lat ? Number(form.lat) : undefined, lng: form.lng ? Number(form.lng) : undefined },
+        // Xarita turi (2GIS / Yandex / Google) serverda havoladan aniqlanadi
+        body: { title: form.title, address: form.address, map_url: form.map_url, provider: 'TWOGIS' },
       }),
     onSuccess: () => {
       haptic('success');
       qc.invalidateQueries({ queryKey: ['teacher-me'] });
       onOpenChange(false);
-      setForm({ title: '', address: '', map_url: '', provider: 'TWOGIS', lat: '', lng: '' });
+      setForm({ title: '', address: '', map_url: '' });
     },
   });
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent side="bottom" title="Yangi manzil" description="Dars o'tiladigan joy: 2GIS, Yandex yoki Google xarita havolasi">
-        <div className="space-y-3">
+      <DialogContent side="bottom" title="Yangi manzil">
+        <div className="space-y-4">
           <Field label="Nomi">
             <Input value={form.title} onChange={set('title')} placeholder="Abdurahmon ibn Avf masjidi" />
           </Field>
           <Field label="Manzil">
             <Input value={form.address} onChange={set('address')} placeholder="Osh sh., ..." />
           </Field>
-          <Field label="Xarita havolasi" hint="Provayder havoladan avtomatik aniqlanadi">
+          <Field label="Xarita havolasi">
             <Input value={form.map_url} onChange={set('map_url')} placeholder="https://2gis.kg/osh/..." />
           </Field>
-          <div className="grid grid-cols-3 gap-2">
-            <Field label="Xarita">
-              <Select value={form.provider} onChange={set('provider')}>
-                <option value="TWOGIS">2GIS</option>
-                <option value="YANDEX">Yandex</option>
-                <option value="GOOGLE">Google</option>
-              </Select>
-            </Field>
-            <Field label="Lat">
-              <Input value={form.lat} onChange={set('lat')} inputMode="decimal" placeholder="40.52" />
-            </Field>
-            <Field label="Lng">
-              <Input value={form.lng} onChange={set('lng')} inputMode="decimal" placeholder="72.79" />
-            </Field>
-          </div>
           {save.error && <ErrorBox error={save.error} />}
           <Button className="w-full" size="lg" loading={save.isPending} onClick={() => save.mutate()}>
             Saqlash
@@ -232,19 +218,19 @@ function TeacherSection() {
 
       <SectionTitle>Ustoz ma'lumotlari</SectionTitle>
       <div className="space-y-3 rounded-2xl border bg-card p-4 ">
-        <Field label="Telegram raqami" hint="Talabalar siz bilan bog'lanadi">
+        <Field label="Telegram raqami">
           <div className="relative">
             <Phone className="absolute left-3 top-3.5 size-4 text-muted-foreground" />
             <Input className="pl-9" value={form.telegramPhone} onChange={(e) => setForm({ ...form, telegramPhone: e.target.value })} inputMode="tel" />
           </div>
         </Field>
-        <Field label="MBank raqami" hint="«O'zimga» darslarda to'lov shu raqamga tushadi">
+        <Field label="MBank raqami">
           <div className="relative">
             <Wallet className="absolute left-3 top-3.5 size-4 text-muted-foreground" />
             <Input className="pl-9" value={form.mbankNumber} onChange={(e) => setForm({ ...form, mbankNumber: e.target.value })} inputMode="tel" />
           </div>
         </Field>
-        <Field label="MBank havolasi (ixtiyoriy)" hint="Agar MBank sizga o'tkazma havolasini bergan bo'lsa — talabaga «MBank orqali o'tkazish» tugmasi chiqadi">
+        <Field label="MBank havolasi (ixtiyoriy)">
           <Input value={form.mbankLink} onChange={(e) => setForm({ ...form, mbankLink: e.target.value })} placeholder="https://..." />
         </Field>
         <Field label="Fanlar">

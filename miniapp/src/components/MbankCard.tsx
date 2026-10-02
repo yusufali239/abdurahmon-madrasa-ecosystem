@@ -49,7 +49,6 @@ export function MbankCard({ number, amount, link }: { number: string; amount?: n
           <ExternalLink className="size-4" /> MBank orqali o'tkazish
         </button>
       )}
-      <p className="px-1 pt-1 text-xs text-muted-foreground">MBank ilovasida shu raqamga o'tkazing, so'ng chek rasmini yuklang.</p>
     </div>
   );
 }
@@ -79,7 +78,7 @@ export function ReceiptInput({ file, onChange }: { file: File | null; onChange: 
       )}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{file ? 'Chek tanlandi' : 'Chek rasmini yuklang'}</p>
-        <p className="truncate text-xs text-muted-foreground">{file ? file.name : 'Skrinshot yoki PDF (15 MB gacha)'}</p>
+        {file && <p className="truncate text-xs text-muted-foreground">{file.name}</p>}
       </div>
       {file && (
         <button

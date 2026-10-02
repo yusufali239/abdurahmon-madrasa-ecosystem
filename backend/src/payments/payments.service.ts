@@ -95,15 +95,16 @@ export class PaymentsService {
     });
   }
 
-  /** Добровольное пожертвование в фонд (засчитывается выбранному учителю) */
-  async createDonation(user: User, teacherId: number, amount: number, receipt?: Express.Multer.File, note?: string) {
+  /**
+   * Добровольная хайрия ученика — АНОНИМНО, в общий фонд.
+   * Не засчитывается ни одному учителю; свою сумму видит только сам ученик.
+   */
+  async createDonation(user: User, amount: number, receipt?: Express.Multer.File, note?: string) {
     if (!Number.isInteger(amount) || amount < 10) throw new BadRequestException('Summa kamida 10 som bo\'lsin');
-    const teacher = await this.prisma.teacher.findUnique({ where: { id: teacherId } });
-    if (!teacher) throw new NotFoundException('Ustoz topilmadi');
     const receiptUrl = receipt ? (await this.uploads.save(receipt, 'receipts')).url : null;
     return this.createPayment({
       studentId: user.id,
-      teacherId,
+      teacherId: null,
       lessonId: null,
       amount,
       paymentType: 'HAYRIYA',
@@ -115,7 +116,7 @@ export class PaymentsService {
 
   private async createPayment(d: {
     studentId: number;
-    teacherId: number;
+    teacherId: number | null;
     lessonId: number | null;
     amount: number;
     paymentType: PaymentType;
@@ -145,9 +146,13 @@ export class PaymentsService {
   }
 
   private paymentText(p: Prisma.PaymentGetPayload<{ include: typeof PAYMENT_INCLUDE }>) {
+    // Анонимная хайрия: без имени ученика
+    if (!p.teacherId || !p.teacher) {
+      return `🤲 <b>Anonim xayriya</b>\n💰 <b>${formatSom(p.amount)}</b>` + (p.period ? ` · ${p.period}` : '');
+    }
     return (
       `👤 ${esc(p.student.fullName)} (${esc(p.student.phone)})\n` +
-      (p.lesson ? `📘 ${esc(p.lesson.subject.name)} — ${esc(p.teacher.user.fullName)}\n` : `🤝 Hayriya — ${esc(p.teacher.user.fullName)} hissasiga\n`) +
+      `📘 ${esc(p.lesson?.subject.name ?? 'Dars')} — ${esc(p.teacher.user.fullName)}\n` +
       `💰 <b>${formatSom(p.amount)}</b> · ${p.paymentType === 'HAYRIYA' ? '🤝 Hayriya' : '💳 MBank (ustozga)'}` +
       (p.period ? ` · ${p.period}` : '')
     );
@@ -159,7 +164,7 @@ export class PaymentsService {
     const receipt = this.uploads.absolute(p.receipt_url);
     const text = `🧾 <b>Yangi to'lov #${p.id}</b>\n\n${this.paymentText(p)}${receipt ? `\n📎 Chek: ${esc(receipt)}` : '\n📎 Chek yuklanmagan'}`;
     if (p.paymentType === 'MBANK_SELF') {
-      await this.messenger.send(p.teacher.user.telegramId, `${text}\n\nMBank hisobingizga tushganini tekshirib, tasdiqlang.`, { reply_markup: kb });
+      await this.messenger.send(p.teacher!.user.telegramId, `${text}\n\nMBank hisobingizga tushganini tekshirib, tasdiqlang.`, { reply_markup: kb });
     } else {
       await this.admins.notify(text, kb);
     }
@@ -168,7 +173,7 @@ export class PaymentsService {
   /** Текст для ученика — без указания, куда ушли деньги */
   private studentText(p: Prisma.PaymentGetPayload<{ include: typeof PAYMENT_INCLUDE }>) {
     return (
-      (p.lesson ? `📘 ${esc(p.lesson.subject.name)} — ${esc(p.teacher.user.fullName)}\n` : '') +
+      (p.lesson && p.teacher ? `📘 ${esc(p.lesson.subject.name)} — ${esc(p.teacher.user.fullName)}\n` : '') +
       `💰 <b>${formatSom(p.amount)}</b>` +
       (p.period ? ` · ${p.period}` : '')
     );
@@ -187,7 +192,7 @@ export class PaymentsService {
   private async assertActor(p: Awaited<ReturnType<PaymentsService['load']>>, actor: PaymentActor) {
     if (p.paymentType === 'MBANK_SELF') {
       // Деньги ушли учителю — проверяет только он сам
-      if (actor.kind !== 'teacher' || p.teacher.userId !== actor.userId) {
+      if (actor.kind !== 'teacher' || p.teacher?.userId !== actor.userId) {
         throw new ForbiddenException('Bu to\'lovni ustozning o\'zi tekshiradi');
       }
       return;
@@ -212,12 +217,14 @@ export class PaymentsService {
       if (!res.count) return;
       if (p.donation) {
         await tx.donation.update({ where: { id: p.donation.id }, data: { status: 'CONFIRMED', confirmedAt: new Date() } });
-        // DonationFund.personalTotal += amount
-        await tx.donationFund.upsert({
-          where: { teacherId: p.teacherId },
-          update: { personalTotal: { increment: p.donation.amount } },
-          create: { teacherId: p.teacherId, personalTotal: p.donation.amount },
-        });
+        // Хайрия за урок -> доля учителя; анонимная хайрия -> только общий фонд
+        if (p.teacherId) {
+          await tx.donationFund.upsert({
+            where: { teacherId: p.teacherId },
+            update: { personalTotal: { increment: p.donation.amount } },
+            create: { teacherId: p.teacherId, personalTotal: p.donation.amount },
+          });
+        }
       }
     });
     if (p.donation) await this.fund.checkLimitCrossed(before);
@@ -259,7 +266,36 @@ export class PaymentsService {
   /** Для ученика — без типа оплаты и данных получателя */
   async mine(user: User) {
     const rows = await this.list({ studentId: user.id });
-    return rows.map(({ paymentType: _t, donation: _d, teacher, ...p }) => ({ ...p, teacher: { user: { fullName: teacher.user.fullName } } }));
+    return rows.map(({ paymentType: _t, donation: _d, teacher, ...p }) => ({ ...p, teacher: teacher ? { user: { fullName: teacher.user.fullName } } : null }));
+  }
+
+  /**
+   * Удаление платежа админом. Если подтверждённая хайрия за урок уже попала в долю учителя — вычитаем.
+   */
+  async remove(id: number) {
+    const p = await this.load(id);
+    await this.prisma.$transaction(async (tx) => {
+      if (p.donation) {
+        if (p.donation.status === 'CONFIRMED' && p.donation.teacherId) {
+          await tx.donationFund.updateMany({
+            where: { teacherId: p.donation.teacherId },
+            data: { personalTotal: { decrement: p.donation.amount } },
+          });
+        }
+        await tx.donation.delete({ where: { id: p.donation.id } });
+      }
+      await tx.payment.delete({ where: { id } });
+    });
+    return { ok: true };
+  }
+
+  /** Сумма анонимных хайрий ученика (видна только ему) */
+  async myDonations(userId: number) {
+    const [confirmed, pending] = await Promise.all([
+      this.prisma.donation.aggregate({ where: { studentId: userId, teacherId: null, status: 'CONFIRMED' }, _sum: { amount: true }, _count: true }),
+      this.prisma.donation.aggregate({ where: { studentId: userId, teacherId: null, status: 'PENDING' }, _sum: { amount: true } }),
+    ]);
+    return { total: confirmed._sum.amount ?? 0, count: confirmed._count, pending: pending._sum.amount ?? 0 };
   }
 
   async forTeacher(userId: number) {
