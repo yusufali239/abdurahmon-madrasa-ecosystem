@@ -153,7 +153,7 @@ export function LessonForm({
             ))}
           </Select>
         </Field>
-        <Field label="Kunlar" hint="Bir nechta kunni tanlash mumkin">
+        <Field label="Kunlar">
           <div className="grid grid-cols-7 gap-1.5">
             {[1, 2, 3, 4, 5, 6, 7].map((d) => (
               <button
@@ -218,14 +218,14 @@ export function LessonForm({
             onClick={() => set('isNewBook', true)}
             icon={BookOpen}
             title="Yangi kitob"
-            text="1-betdan boshlanadi"
+            text="1-betdan"
           />
           <Choice
             active={!value.isNewBook}
             onClick={() => set('isNewBook', false)}
             icon={BookOpenCheck}
             title="Davom etayotgan"
-            text="Darsni boshlaganda betni so'raymiz"
+            text="Bet darsda so'raladi"
           />
         </div>
         <Field label="Kitob nomi">
@@ -268,17 +268,16 @@ export function LessonForm({
             onClick={() => set('paymentType', 'MBANK_SELF')}
             icon={Wallet}
             title="O'zimga"
-            text="MBank raqamimga. Chekni o'zim tekshiraman"
+            text="O'zim tekshiraman"
           />
           <Choice
             active={value.paymentType === 'HAYRIYA'}
             onClick={() => set('paymentType', 'HAYRIYA')}
             icon={HandHeart}
             title="Hayriyaga"
-            text="Madrasa jamg'armasiga. Admin tekshiradi"
+            text="Admin tekshiradi"
           />
         </div>
-        <p className="text-xs text-muted-foreground">Talaba faqat summa va raqamni ko'radi.</p>
       </Section>
 
       {isEdit && <Switch checked={value.isActive} onChange={(v) => set('isActive', v)} label="Dars faol" />}

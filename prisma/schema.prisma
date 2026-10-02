@@ -309,8 +309,9 @@ model Payment {
   id          Int           @id @default(autoincrement())
   studentId   Int
   student     User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacherId   Int
-  teacher     Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  // null — анонимная добровольная хайрия (не относится ни к одному учителю)
+  teacherId   Int?
+  teacher     Teacher?      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   lessonId    Int?
   lesson      Lesson?       @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   amount      Int
@@ -331,8 +332,9 @@ model Payment {
 
 model Donation {
   id          Int            @id @default(autoincrement())
-  teacherId   Int
-  teacher     Teacher        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  // null — анонимная хайрия ученика в общий фонд (не засчитывается учителю)
+  teacherId   Int?
+  teacher     Teacher?       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   studentId   Int
   student     User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
   amount      Int

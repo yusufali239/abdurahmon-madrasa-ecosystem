@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, FileImage, X } from 'lucide-react';
+import { Check, FileImage, Trash2, X } from 'lucide-react';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
 import { cn, dateUz, PAYMENT_STATUS, som } from '@shared/lib/utils';
@@ -16,6 +16,14 @@ export default function PaymentsPage() {
   const act = useMutation({
     mutationFn: ({ id, ok }: { id: number; ok: boolean }) =>
       api(`/admin/payments/${id}/${ok ? 'confirm' : 'reject'}`, { method: 'POST', body: ok ? {} : { reason: prompt('Rad etish sababi (ixtiyoriy)') || undefined } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payments'] });
+      qc.invalidateQueries({ queryKey: ['stats'] });
+      qc.invalidateQueries({ queryKey: ['fund'] });
+    },
+  });
+  const del = useMutation({
+    mutationFn: (id: number) => api(`/admin/payments/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payments'] });
       qc.invalidateQueries({ queryKey: ['stats'] });
@@ -47,8 +55,8 @@ export default function PaymentsPage() {
           </button>
         ))}
       </div>
-      <ErrorBox error={act.error} />
-      <Table head={['#', 'Talaba', 'Dars / Ustoz', 'Summa', 'Turi', 'Chek', 'Holat', '']} empty={payments.data?.length === 0}>
+      <ErrorBox error={act.error || del.error} />
+      <Table head={['#', 'Talaba', 'Dars / Ustoz', 'Summa', 'Turi', 'Chek', 'Holat', '', '']} empty={payments.data?.length === 0}>
         {payments.data?.map((p) => (
           <tr key={p.id}>
             <td className="text-xs text-muted-foreground">{p.id}</td>
@@ -57,9 +65,10 @@ export default function PaymentsPage() {
               <p className="text-xs text-muted-foreground">{p.student.phone}</p>
             </td>
             <td>
-              <p>{p.lesson ? p.lesson.subject.name : 'Hayriya xayriyasi'}</p>
+              <p>{p.lesson ? p.lesson.subject.name : p.teacherId ? 'Dars' : 'Anonim xayriya'}</p>
               <p className="text-xs text-muted-foreground">
-                {p.teacher.user.fullName} · {p.period ? `${dateUz(p.period)} darsi` : dateUz(p.createdAt)}
+                {p.teacher ? `${p.teacher.user.fullName} · ` : ''}
+                {p.period ? (p.lessonId ? `${dateUz(p.period)} darsi` : dateUz(p.period)) : dateUz(p.createdAt)}
               </p>
             </td>
             <td className="font-extrabold">{som(p.amount)}</td>
@@ -90,6 +99,15 @@ export default function PaymentsPage() {
                   </Button>
                 </div>
               )}
+            </td>
+            <td>
+              <button
+                title="O'chirish"
+                onClick={() => confirm(`To'lov #${p.id} o'chirilsinmi?`) && del.mutate(p.id)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="size-4" />
+              </button>
             </td>
           </tr>
         ))}

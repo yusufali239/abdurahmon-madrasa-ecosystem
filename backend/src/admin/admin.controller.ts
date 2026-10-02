@@ -18,6 +18,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { NewsType, PaymentStatus, PaymentType, Role } from '@prisma/client';
 import { AdminGuard } from '../auth/guards';
+import { AppConfig } from '../config/app-config.service';
 import { dateOnly } from '../common/time.util';
 import { ContentService } from '../content/content.service';
 import { FundService } from '../fund/fund.service';
@@ -47,6 +48,7 @@ export class AdminController {
     private readonly news: NewsService,
     private readonly uploads: UploadsService,
     private readonly content: ContentService,
+    private readonly cfg: AppConfig,
   ) {}
 
   private actor(req: any) {
@@ -107,6 +109,26 @@ export class AdminController {
   @Post('users/:id/block')
   block(@Param('id', ParseIntPipe) id: number) {
     return this.users.setStatus(id, 'BLOCKED');
+  }
+
+  /** Полное удаление пользователя (каскадом: профиль учителя, уроки, записи, платежи, оценки) */
+  @Delete('users/:id')
+  async removeUser(@Param('id', ParseIntPipe) id: number) {
+    const u = await this.prisma.user.findUnique({ where: { id }, include: { teacher: true } });
+    if (!u) return { ok: true };
+    if (this.cfg.isAdmin(String(u.telegramId))) throw new BadRequestException('ADMIN_IDS dagi adminni o\'chirib bo\'lmaydi');
+    await this.prisma.user.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  /** Удалить все демо-данные из seed (тестовые учителя, ученики, новости, отчёты) */
+  @Post('demo/clear')
+  async clearDemo() {
+    const ids = [100000010n, 100000011n, 100000012n, 100000101n, 100000102n, 100000103n, 100000104n];
+    const users = await this.prisma.user.deleteMany({ where: { telegramId: { in: ids } } });
+    const news = await this.prisma.news.deleteMany({ where: { title: { startsWith: '[Demo]' } } });
+    const reports = await this.prisma.donationReport.deleteMany({ where: { description: { startsWith: '[Demo]' } } });
+    return { users: users.count, news: news.count, reports: reports.count };
   }
 
   @Post('users/:id/unblock')
@@ -243,6 +265,25 @@ export class AdminController {
     return this.sessions.finish(id, dto);
   }
 
+  /** Полное удаление урока (с занятиями, материалами, записями) */
+  @Delete('lessons/:id')
+  async removeLesson(@Param('id', ParseIntPipe) id: number) {
+    await this.prisma.lesson.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  @Delete('sessions/:id')
+  async removeSession(@Param('id', ParseIntPipe) id: number) {
+    await this.prisma.lessonSession.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  @Delete('grades/:id')
+  async removeGrade(@Param('id', ParseIntPipe) id: number) {
+    await this.prisma.grade.delete({ where: { id } });
+    return { ok: true };
+  }
+
   @Post('lessons/:id/contents')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async addContent(
@@ -285,8 +326,15 @@ export class AdminController {
   // ---------- Платежи ----------
 
   @Get('payments')
-  listPayments(@Query('status') status?: PaymentStatus, @Query('type') type?: PaymentType) {
-    return this.payments.list({ status: status || undefined, paymentType: type || undefined });
+  async listPayments(@Query('status') status?: PaymentStatus, @Query('type') type?: PaymentType) {
+    const rows = await this.payments.list({ status: status || undefined, paymentType: type || undefined });
+    // Анонимная хайрия: имя ученика не показываем даже админу
+    return rows.map((p) => (p.teacherId ? p : { ...p, student: { ...p.student, fullName: 'Anonim', phone: null }, anonymous: true }));
+  }
+
+  @Delete('payments/:id')
+  removePayment(@Param('id', ParseIntPipe) id: number) {
+    return this.payments.remove(id);
   }
 
   @Post('payments/:id/confirm')
@@ -318,7 +366,19 @@ export class AdminController {
       },
       orderBy: { createdAt: 'desc' },
       take: 300,
-    });
+    }).then((rows) => rows.map((d) => (d.teacherId ? d : { ...d, student: { fullName: 'Anonim', phone: null } })));
+  }
+
+  @Delete('donations/:id')
+  async removeDonation(@Param('id', ParseIntPipe) id: number) {
+    const d = await this.prisma.donation.findUnique({ where: { id } });
+    if (!d) return { ok: true };
+    if (d.paymentId) return this.payments.remove(d.paymentId);
+    if (d.status === 'CONFIRMED' && d.teacherId) {
+      await this.prisma.donationFund.updateMany({ where: { teacherId: d.teacherId }, data: { personalTotal: { decrement: d.amount } } });
+    }
+    await this.prisma.donation.delete({ where: { id } });
+    return { ok: true };
   }
 
   @Put('fund/limit')

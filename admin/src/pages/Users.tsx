@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Ban, X } from 'lucide-react';
+import { Check, Ban, Trash2, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { Badge } from '@shared/ui/badge';
 import { Button } from '@shared/ui/button';
@@ -27,7 +27,11 @@ export default function UsersPage() {
   const users = useQuery({ queryKey: ['users', qs.toString()], queryFn: () => api<any[]>(`/admin/users?${qs}`) });
   const act = useMutation({
     mutationFn: ({ id, action, body }: { id: number; action: string; body?: any }) =>
-      action === 'role' ? api(`/admin/users/${id}`, { method: 'PATCH', body }) : api(`/admin/users/${id}/${action}`, { method: 'POST', body: body ?? {} }),
+      action === 'role'
+        ? api(`/admin/users/${id}`, { method: 'PATCH', body })
+        : action === 'delete'
+          ? api(`/admin/users/${id}`, { method: 'DELETE' })
+          : api(`/admin/users/${id}/${action}`, { method: 'POST', body: body ?? {} }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: ['stats'] });
@@ -97,6 +101,14 @@ export default function UsersPage() {
                     <Ban />
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title="O'chirish"
+                  onClick={() => confirm(`${u.fullName || 'Foydalanuvchi'} butunlay o'chirilsinmi? Uning darslari, to'lovlari va baholari ham o'chadi.`) && act.mutate({ id: u.id, action: 'delete' })}
+                >
+                  <Trash2 />
+                </Button>
                 {u.status === 'BLOCKED' && (
                   <Button size="sm" variant="outline" onClick={() => act.mutate({ id: u.id, action: 'unblock' })}>
                     Blokdan chiqarish

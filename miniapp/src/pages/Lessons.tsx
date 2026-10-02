@@ -71,7 +71,7 @@ export default function LessonsPage() {
       </div>
       {lessons.isLoading && <ListSkeleton />}
       {lessons.error && <ErrorBox error={lessons.error} />}
-      {lessons.data && !lessons.data.length && <EmptyState title="Darslar topilmadi" text="Boshqa fan yoki kunni tanlab ko'ring." />}
+      {lessons.data && !lessons.data.length && <EmptyState title="Darslar topilmadi" />}
       <div className="space-y-3">
         {lessons.data?.map((l) => (
           <LessonCard key={l.id} lesson={l} />

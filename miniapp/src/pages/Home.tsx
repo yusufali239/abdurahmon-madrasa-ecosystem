@@ -9,6 +9,7 @@ import { useMe } from '@/lib/me';
 import type { Lesson, News, Subject } from '@/lib/types';
 import { EmptyState, ListSkeleton, SectionTitle, SubjectIcon } from '@/components/common';
 import { LessonCard } from '@/components/LessonCard';
+import { TodayLessonsWidget } from '@/components/TodayLessonsWidget';
 
 interface Today {
   weekDayName: string;
@@ -24,7 +25,9 @@ export default function HomePage() {
   const lessons = useQuery({ queryKey: ['lessons', 'today'], queryFn: () => api<Lesson[]>('/lessons/today') });
   const subjects = useQuery({ queryKey: ['subjects'], queryFn: () => api<Subject[]>('/subjects') });
   const news = useQuery({ queryKey: ['news', 'all'], queryFn: () => api<News[]>('/news') });
-  const firstName = (me.fullName || '').split(' ').slice(-1)[0];
+  // «Karimov Azizbek» -> «Azizbek»; «Sardor domla» -> «Sardor domla»
+  const words = (me.fullName || '').split(' ');
+  const firstName = /^(domla|ustoz|aka|opa)$/i.test(words[words.length - 1] || '') ? me.fullName : words[words.length - 1];
   const prayers = today.data?.prayers.filter((p) => p.key !== 'quyosh') ?? [];
 
   return (
@@ -60,7 +63,9 @@ export default function HomePage() {
       </div>
 
       <SectionTitle>Bugungi darslar</SectionTitle>
-      {lessons.isLoading ? (
+      {me.role === 'TEACHER' ? (
+        <TodayLessonsWidget />
+      ) : lessons.isLoading ? (
         <ListSkeleton rows={1} />
       ) : lessons.data?.length ? (
         <div className="space-y-3">
@@ -69,7 +74,7 @@ export default function HomePage() {
           ))}
         </div>
       ) : (
-        <EmptyState title="Bugun dars yo'q" text="Barcha darslar «Darslar» bo'limida." />
+        <EmptyState title="Bugun dars yo'q" />
       )}
 
       <SectionTitle>Fanlar</SectionTitle>

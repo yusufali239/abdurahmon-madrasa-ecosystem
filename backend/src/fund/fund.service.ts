@@ -42,9 +42,13 @@ export class FundService {
     return this.summary();
   }
 
+  /** Общий фонд = доли учителей (хайрия за уроки) + анонимные хайрии учеников */
   async globalTotal(): Promise<number> {
-    const agg = await this.prisma.donationFund.aggregate({ _sum: { personalTotal: true } });
-    return agg._sum.personalTotal ?? 0;
+    const [funds, anon] = await Promise.all([
+      this.prisma.donationFund.aggregate({ _sum: { personalTotal: true } }),
+      this.prisma.donation.aggregate({ where: { teacherId: null, status: 'CONFIRMED' }, _sum: { amount: true } }),
+    ]);
+    return (funds._sum.personalTotal ?? 0) + (anon._sum.amount ?? 0);
   }
 
   async summary(teacherId?: number) {

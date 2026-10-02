@@ -38,15 +38,17 @@ export class PaymentsController {
     return this.payments.createForLesson(user, Number(body.lessonId), body.date, receipt, body.note);
   }
 
-  /** Пожертвование в фонд Hayriya (teacherId, amount, receipt) */
+  /** Анонимная хайрия в общий фонд (amount, receipt) */
   @Post('donations')
   @UseInterceptors(FileInterceptor('receipt', RECEIPT_LIMIT))
-  donate(
-    @CurrentUser() user: User,
-    @Body() body: { teacherId: string; amount: string; note?: string },
-    @UploadedFile() receipt?: Express.Multer.File,
-  ) {
-    return this.payments.createDonation(user, Number(body.teacherId), Number(body.amount), receipt, body.note);
+  donate(@CurrentUser() user: User, @Body() body: { amount: string; note?: string }, @UploadedFile() receipt?: Express.Multer.File) {
+    return this.payments.createDonation(user, Number(body.amount), receipt, body.note);
+  }
+
+  /** Мои хайрии — видны только мне */
+  @Get('donations/mine')
+  myDonations(@CurrentUser() user: User) {
+    return this.payments.myDonations(user.id);
   }
 
   @Get('payments/mine')

@@ -12,7 +12,7 @@ import type { Lesson } from '@/lib/types';
 import { AttendanceSheet } from '@/components/AttendanceSheet';
 import { EmptyState, ErrorBox, ListSkeleton, PageHeader, SectionTitle } from '@/components/common';
 import { LessonCard } from '@/components/LessonCard';
-import { FinishButton, StartButton, type TeacherSession } from '@/components/SessionControls';
+import type { TeacherSession } from '@/components/SessionControls';
 
 const STATUS: Record<TeacherSession['status'], { label: string; cls: string }> = {
   SCHEDULED: { label: 'Tasdiqlanmagan', cls: 'text-muted-foreground' },
@@ -61,7 +61,7 @@ export default function TeacherPage() {
 
       <SectionTitle>Mashg'ulotlar</SectionTitle>
       {sessions.isLoading && <ListSkeleton rows={2} />}
-      {sessions.data && !sessions.data.length && <EmptyState title="Bugun dars yo'q" text="Dars kunlari bu yerda «Darsni boshlash» tugmasi chiqadi." />}
+      {sessions.data && !sessions.data.length && <EmptyState title="Mashg'ulotlar yo'q" />}
       <div className="space-y-3">
         {sessions.data?.map((s) => {
           const info =
@@ -83,8 +83,6 @@ export default function TeacherPage() {
 
               {s.status !== 'CANCELLED' && (
                 <div className="mt-4 space-y-2">
-                  {(s.status === 'SCHEDULED' || s.status === 'CONFIRMED') && <StartButton session={s} className="w-full" />}
-                  {s.status === 'STARTED' && <FinishButton session={s} className="w-full" />}
                   <div className="flex gap-2">
                     {s.status === 'SCHEDULED' && (
                       <>
@@ -111,7 +109,7 @@ export default function TeacherPage() {
       {confirm.error && <ErrorBox error={confirm.error} />}
 
       <SectionTitle>Mening darslarim</SectionTitle>
-      {lessons.data && !lessons.data.length && <EmptyState title="Darslar yo'q" text="«Yangi dars» tugmasi orqali qo'shing." />}
+      {lessons.data && !lessons.data.length && <EmptyState title="Darslar yo'q" />}
       <div className="space-y-3">
         {lessons.data?.map((l) => (
           <LessonCard key={l.id} lesson={l} to={`/teacher/lessons/${l.id}`} />
@@ -131,7 +129,7 @@ export default function TeacherPage() {
       )}
 
       <Dialog open={!!cancelId} onOpenChange={(v) => !v && setCancelId(null)}>
-        <DialogContent side="bottom" title="Darsni bekor qilish" description="Sabab talabalarga yuboriladi">
+        <DialogContent side="bottom" title="Darsni bekor qilish">
           <Textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Masalan: Betobman" />
           {cancel.error && <ErrorBox error={cancel.error} />}
           <Button className="mt-4 w-full" variant="destructive" size="lg" disabled={reason.trim().length < 3} loading={cancel.isPending} onClick={() => cancel.mutate()}>
