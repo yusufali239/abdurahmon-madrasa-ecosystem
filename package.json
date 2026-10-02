@@ -1,0 +1,41 @@
+{
+  "name": "abdurahmon-madrasa-ecosystem",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Abdurahmon ibn Avf madrasasi — Telegram ekotizim (Bot + Mini App + Admin panel)",
+  "workspaces": [
+    "backend",
+    "miniapp",
+    "admin"
+  ],
+  "scripts": {
+    "postinstall": "prisma generate",
+    "dev": "concurrently -k -n api,miniapp,admin -c green,yellow,cyan \"npm run dev -w backend\" \"npm run dev -w miniapp\" \"npm run dev -w admin\"",
+    "build": "prisma generate && npm run build -w backend && npm run build -w miniapp && npm run build -w admin",
+    "start": "npm run start -w backend",
+    "db:up": "docker compose up -d postgres redis",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
+    "db:reset": "prisma migrate reset --force",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma",
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "concurrently": "^9.1.0",
+    "prisma": "^6.19.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

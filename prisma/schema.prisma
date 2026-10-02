@@ -1,0 +1,381 @@
+// ============================================================
+//  Abdurahmon ibn Avf madrasasi — схема базы данных
+//  PostgreSQL + Prisma. Все даты хранятся в UTC,
+//  бизнес-логика (cron, дни недели) работает в Asia/Bishkek.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Перечисления ----------
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  BLOCKED
+}
+
+// Шаг регистрации в боте: паспорт -> контакт -> ФИО -> роль -> готово
+enum RegStep {
+  PASSPORT
+  CONTACT
+  FULL_NAME
+  ROLE
+  DONE
+}
+
+enum MapProvider {
+  TWOGIS @map("2GIS")
+  YANDEX
+  GOOGLE
+}
+
+enum ContentType {
+  AUDIO
+  VIDEO
+  PDF
+}
+
+enum NewsType {
+  TADBIR
+  SPORT_FUTBOL
+  ELON
+}
+
+enum PaymentType {
+  MBANK_SELF
+  HAYRIYA
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+enum DonationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+// Статус конкретного занятия (экземпляр урока на дату)
+enum SessionStatus {
+  SCHEDULED
+  CONFIRMED
+  CANCELLED
+  DONE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  LEFT
+}
+
+// ---------- Пользователи ----------
+
+model User {
+  id                  Int        @id @default(autoincrement())
+  telegramId          BigInt     @unique
+  username            String?
+  passportId          String?    @unique
+  phone               String?
+  fullName            String?
+  role                Role       @default(STUDENT)
+  status              UserStatus @default(PENDING)
+  regStep             RegStep    @default(PASSPORT)
+  // Ожидаемое действие в боте (например, ввод причины отмены урока)
+  pendingAction       String?
+  pendingPayload      Json?
+  // ID последнего сообщения бота — для «чистого чата»
+  last_bot_message_id Int?
+  approvedAt          DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  teacher     Teacher?
+  enrollments Enrollment[]
+  payments    Payment[]
+  donations   Donation[]
+  attendances Attendance[]
+  grades      Grade[]
+
+  @@index([status])
+  @@index([role])
+}
+
+model Teacher {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio           String?
+  // Отдельные поля, учитель редактирует их сам
+  telegramPhone String
+  mbankNumber   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subjects     Subject[]
+  locations    TeacherLocation[]
+  lessons      Lesson[]
+  payments     Payment[]
+  donations    Donation[]
+  donationFund DonationFund?
+  grades       Grade[]
+}
+
+model Subject {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  icon        String?
+  color       String?
+  sortOrder   Int       @default(0)
+  teachers    Teacher[]
+  lessons     Lesson[]
+}
+
+model TeacherLocation {
+  id        Int         @id @default(autoincrement())
+  teacherId Int
+  teacher   Teacher     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  title     String
+  address   String
+  map_url   String
+  lat       Float?
+  lng       Float?
+  provider  MapProvider @default(TWOGIS)
+  createdAt DateTime    @default(now())
+  lessons   Lesson[]
+}
+
+// ---------- Уроки (непрерывные) и прогресс книги ----------
+
+model Lesson {
+  id              Int         @id @default(autoincrement())
+  teacherId       Int
+  teacher         Teacher     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subjectId       Int
+  subject         Subject     @relation(fields: [subjectId], references: [id])
+  locationId      Int?
+  location        TeacherLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  isContinuous    Boolean     @default(true)
+  // 1 = Dushanba ... 7 = Yakshanba
+  weekDay         Int
+  // Текстовое время: "Shomdan keyin", "18:30"
+  startTime       String
+  endTime         String
+  // Точное время "HH:mm" (необязательно). Если пусто — вычисляется из startTime (время намаза в Оше)
+  startClock      String?
+  bookTitle       String
+  bookTotalPages  Int
+  currentPageFrom Int
+  currentPageTo   Int
+  topic           String
+  nextTopic       String?
+  // 0 | 50 | 100 | 200
+  priceTier       Int         @default(0)
+  // Персональная цена (перекрывает priceTier)
+  customPrice     Int?
+  paymentType     PaymentType @default(MBANK_SELF)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  contents    LessonContent[]
+  sessions    LessonSession[]
+  enrollments Enrollment[]
+  payments    Payment[]
+  grades      Grade[]
+
+  @@index([weekDay, isActive])
+}
+
+// Экземпляр урока на конкретную дату (подтверждение, отмена, напоминание, посещаемость)
+model LessonSession {
+  id             Int           @id @default(autoincrement())
+  lessonId       Int
+  lesson         Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  date           DateTime      @db.Date
+  status         SessionStatus @default(SCHEDULED)
+  startsAt       DateTime?
+  pageFrom       Int
+  pageTo         Int
+  topic          String
+  cancelReason   String?
+  askedAt        DateTime?
+  confirmedAt    DateTime?
+  reminderSentAt DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime      @default(now())
+
+  attendances Attendance[]
+  grades      Grade[]
+
+  @@unique([lessonId, date])
+}
+
+model LessonContent {
+  id          Int         @id @default(autoincrement())
+  lessonId    Int
+  lesson      Lesson      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  type        ContentType
+  title       String      @default("")
+  url         String
+  isFree      Boolean     @default(false)
+  durationSec Int?
+  pageCount   Int?
+  createdAt   DateTime    @default(now())
+
+  @@index([lessonId, type])
+}
+
+model Enrollment {
+  id        Int              @id @default(autoincrement())
+  lessonId  Int
+  lesson    Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  studentId Int
+  student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status    EnrollmentStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+
+  @@unique([lessonId, studentId])
+}
+
+// ---------- Посещаемость и оценки ----------
+
+model Attendance {
+  id        Int              @id @default(autoincrement())
+  sessionId Int
+  session   LessonSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId Int
+  student   User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status    AttendanceStatus @default(PRESENT)
+  note      String?
+  markedAt  DateTime         @default(now())
+
+  @@unique([sessionId, studentId])
+}
+
+model Grade {
+  id        Int            @id @default(autoincrement())
+  lessonId  Int
+  lesson    Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  sessionId Int?
+  session   LessonSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  studentId Int
+  student   User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId Int
+  teacher   Teacher        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  // 1..5
+  score     Int
+  comment   String?
+  createdAt DateTime       @default(now())
+
+  @@index([studentId])
+}
+
+// ---------- Платежи и благотворительный фонд ----------
+
+model Payment {
+  id          Int           @id @default(autoincrement())
+  studentId   Int
+  student     User          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId   Int
+  teacher     Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  lessonId    Int?
+  lesson      Lesson?       @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  amount      Int
+  paymentType PaymentType
+  status      PaymentStatus @default(PENDING)
+  receipt_url String?
+  // Оплачиваемый период "YYYY-MM"
+  period      String?
+  note        String?
+  confirmedAt DateTime?
+  confirmedBy Int?
+  createdAt   DateTime      @default(now())
+
+  donation Donation?
+
+  @@index([status])
+}
+
+model Donation {
+  id          Int            @id @default(autoincrement())
+  teacherId   Int
+  teacher     Teacher        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  studentId   Int
+  student     User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  amount      Int
+  status      DonationStatus @default(PENDING)
+  paymentType PaymentType    @default(HAYRIYA)
+  paymentId   Int?           @unique
+  payment     Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  receipt_url String?
+  confirmedAt DateTime?
+  createdAt   DateTime       @default(now())
+
+  @@index([status])
+}
+
+// Личный вклад учителя в фонд. Общая сумма = sum(personalTotal)
+model DonationFund {
+  id            Int      @id @default(autoincrement())
+  teacherId     Int      @unique
+  teacher       Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  personalTotal Int      @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+// Отчёт о распределении фонда (видео + описание)
+model DonationReport {
+  id          Int      @id @default(autoincrement())
+  video_url   String
+  description String
+  spentAmount Int
+  createdAt   DateTime @default(now())
+}
+
+// ---------- Новости ----------
+
+model News {
+  id         Int       @id @default(autoincrement())
+  title      String
+  body       String
+  image_url  String?
+  type       NewsType  @default(ELON)
+  pushedAt   DateTime?
+  recipients Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
+}
+
+// Настройки, редактируемые в админ-панели (например, DONATION_LIMIT)
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
