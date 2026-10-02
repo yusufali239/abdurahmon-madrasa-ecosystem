@@ -1,0 +1,68 @@
+# ============================================================
+#  Render Blueprint — весь проект «одной кнопкой»:
+#  Render → New → Blueprint → выбрать этот репозиторий.
+#
+#  Создаётся:
+#   • madrasa-redis — Redis для очередей (бесплатный)
+#   • madrasa       — один сервер: API + Telegram-бот + cron 08:00,
+#                     Mini App по адресу /app, админ-панель по адресу /admin
+#  База данных — ваша Supabase (DATABASE_URL вводится при создании).
+#  При первом запуске таблицы создаются и заполняются автоматически.
+# ============================================================
+services:
+  - type: keyvalue
+    name: madrasa-redis
+    plan: free
+    region: frankfurt
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+  - type: web
+    name: madrasa
+    runtime: node
+    # starter — сервер не «засыпает» (нужно для cron 08:00 и бота) и поддерживает диск
+    plan: starter
+    region: frankfurt
+    buildCommand: npm ci --include=dev && npm run build:bundle
+    startCommand: npm run start:prod -w backend
+    healthCheckPath: /api/health
+    disk:
+      name: uploads
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: TZ
+        value: Asia/Bishkek
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: ALLOW_DEV_AUTH
+        value: "false"
+      - key: HAYRIYA_RECIPIENT_NAME
+        value: Abdurahmon ibn Avf madrasasi
+      - key: DONATION_LIMIT
+        value: "20000"
+      # true — при первом запуске добавить демо-данные (Sardor domla и т.д.); false — только предметы
+      - key: SEED_DEMO
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: BOT_WEBHOOK_SECRET
+        generateValue: true
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: madrasa-redis
+          property: connectionString
+      # --- Эти значения Render попросит ввести при создании ---
+      - key: DATABASE_URL
+        sync: false
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: HAYRIYA_MBANK_NUMBER
+        sync: false

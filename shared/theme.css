@@ -1,0 +1,82 @@
+/* Общие CSS-переменные темы (shadcn/ui-совместимые, HSL) */
+@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 38 35% 96%;        /* #FAF7F2 */
+    --foreground: 160 26% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 160 26% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 160 26% 11%;
+    --primary: 162 79% 27%;          /* #0E7A5A */
+    --primary-foreground: 38 35% 97%;
+    --secondary: 160 30% 93%;
+    --secondary-foreground: 162 79% 22%;
+    --gold: 40 47% 56%;              /* #C4A15A */
+    --gold-foreground: 35 45% 18%;
+    --gold-soft: 40 60% 93%;
+    --muted: 38 22% 92%;
+    --muted-foreground: 160 8% 40%;
+    --accent: 40 60% 93%;
+    --accent-foreground: 35 45% 22%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 60% 36%;
+    --border: 38 22% 87%;
+    --input: 38 22% 84%;
+    --ring: 162 79% 27%;
+    --radius: 0.9rem;
+  }
+  .dark {
+    --background: 165 22% 7%;
+    --foreground: 40 30% 93%;
+    --card: 165 20% 10%;
+    --card-foreground: 40 30% 93%;
+    --popover: 165 20% 10%;
+    --popover-foreground: 40 30% 93%;
+    --primary: 161 62% 40%;
+    --primary-foreground: 165 30% 6%;
+    --secondary: 165 18% 15%;
+    --secondary-foreground: 40 30% 90%;
+    --gold: 40 55% 62%;
+    --gold-foreground: 35 45% 10%;
+    --gold-soft: 40 25% 16%;
+    --muted: 165 16% 14%;
+    --muted-foreground: 40 10% 65%;
+    --accent: 40 25% 16%;
+    --accent-foreground: 40 50% 80%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 50% 45%;
+    --border: 165 14% 18%;
+    --input: 165 14% 22%;
+    --ring: 161 62% 40%;
+  }
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'ss01', 'cv11';
+  }
+}
+
+@layer components {
+  .ornament {
+    @apply bg-pattern;
+  }
+  .text-gradient-gold {
+    background: linear-gradient(90deg, #a8843f, #c4a15a 40%, #e2c98d);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
