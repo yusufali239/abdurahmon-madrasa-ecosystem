@@ -144,6 +144,12 @@ export class BotService implements OnApplicationBootstrap, OnModuleDestroy {
         { command: 'davomat', description: 'Davomat (ustozlar uchun)' },
         { command: 'admin', description: 'Admin panelga kirish' },
       ]);
+      // Кнопка «Madrasa» слева от поля ввода — открывает Mini App (вместо ручной настройки в @BotFather)
+      if (/^https:\/\//.test(this.cfg.miniAppUrl)) {
+        await this.bot.api
+          .setChatMenuButton({ menu_button: { type: 'web_app', text: '🕌 Madrasa', web_app: { url: this.cfg.miniAppUrl } } })
+          .catch((e) => this.logger.warn(`Menyu tugmasi o'rnatilmadi: ${(e as Error).message}`));
+      }
       if (this.cfg.botWebhookUrl) {
         await this.bot.api.setWebhook(this.cfg.botWebhookUrl, {
           secret_token: this.cfg.botWebhookSecret,

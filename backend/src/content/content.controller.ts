@@ -29,7 +29,7 @@ import { AppConfig } from '../config/app-config.service';
 import { LessonsService } from '../lessons/lessons.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TeachersService } from '../teachers/teachers.service';
-import { MAX_UPLOAD_BYTES, UPLOAD_ROOT, UploadsService } from '../uploads/uploads.service';
+import { BUNDLED_UPLOADS, MAX_UPLOAD_BYTES, UPLOAD_ROOT, UploadsService } from '../uploads/uploads.service';
 import { ContentService } from './content.service';
 
 const TYPE_BY_MIME = (mime: string) => (mime.startsWith('audio/') ? 'AUDIO' : mime.startsWith('video/') ? 'VIDEO' : 'PDF');
@@ -114,8 +114,8 @@ export class ContentController {
     if (c.url.startsWith('/uploads/')) {
       const rel = normalize(c.url.replace(/^\/uploads\//, ''));
       if (rel.startsWith('..')) throw new ForbiddenException();
-      const path = join(UPLOAD_ROOT, rel);
-      if (!existsSync(path)) throw new NotFoundException('Fayl topilmadi');
+      const path = [join(UPLOAD_ROOT, rel), join(BUNDLED_UPLOADS, rel)].find((p) => existsSync(p));
+      if (!path) throw new NotFoundException('Fayl topilmadi');
       res.setHeader('Cache-Control', 'private, max-age=3600');
       return res.sendFile(path);
     }

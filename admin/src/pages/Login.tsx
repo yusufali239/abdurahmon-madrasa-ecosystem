@@ -4,7 +4,6 @@ import { Button } from '@shared/ui/button';
 import { Logo } from '@shared/ui/logo';
 import { api, setToken } from '@/lib/api';
 
-const BOT = import.meta.env.VITE_BOT_USERNAME || 'abdurahmon_madrasa_bot';
 
 /** Вход: одноразовая ссылка из бота (/admin), Telegram WebApp initData или dev-режим */
 export default function LoginPage() {
@@ -12,6 +11,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [devAuth, setDevAuth] = useState(false);
+  const [BOT, setBot] = useState(import.meta.env.VITE_BOT_USERNAME || 'abdurahmon_madrasa_bot');
   const [loading, setLoading] = useState(false);
 
   const finish = (t: { accessToken: string }) => {
@@ -29,7 +29,12 @@ export default function LoginPage() {
       setLoading(true);
       api('/auth/admin/telegram', { body: { initData } }).then(finish).catch((e) => setError(e.message)).finally(() => setLoading(false));
     }
-    api<{ devAuth: boolean }>('/auth/config').then((c) => setDevAuth(c.devAuth)).catch(() => undefined);
+    api<{ devAuth: boolean; botUsername: string }>('/auth/config')
+      .then((c) => {
+        setDevAuth(c.devAuth);
+        if (c.botUsername) setBot(c.botUsername);
+      })
+      .catch(() => undefined);
   }, []);
 
   return (

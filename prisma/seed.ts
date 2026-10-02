@@ -62,6 +62,17 @@ async function main() {
     });
   }
 
+  // SEED_DEMO=false — только предметы, админы и настройки (без демо-учителей и студентов)
+  if (process.env.SEED_DEMO === 'false') {
+    await prisma.appSetting.upsert({
+      where: { key: 'DONATION_LIMIT' },
+      update: {},
+      create: { key: 'DONATION_LIMIT', value: process.env.DONATION_LIMIT || '20000' },
+    });
+    console.log('✅ Seed tayyor (demo ma\'lumotlarsiz): fanlar va adminlar');
+    return;
+  }
+
   // ---------- Очистка прежних демо-данных ----------
   const demoIds = [...TEACHERS, ...STUDENTS].map((u) => u.telegramId).concat(100000104n);
   await prisma.user.deleteMany({ where: { telegramId: { in: demoIds } } });

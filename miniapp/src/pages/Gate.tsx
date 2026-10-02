@@ -6,7 +6,13 @@ import { api, setDevId } from '@/lib/api';
 import { openLink } from '@/lib/telegram';
 import type { Me } from '@/lib/types';
 
-const BOT = import.meta.env.VITE_BOT_USERNAME || 'abdurahmon_madrasa_bot';
+const FALLBACK_BOT = import.meta.env.VITE_BOT_USERNAME || 'abdurahmon_madrasa_bot';
+
+/** Username бота берётся с сервера (getMe), чтобы не настраивать вручную */
+function useBotUsername() {
+  const cfg = useQuery({ queryKey: ['auth-config'], queryFn: () => api<{ devAuth: boolean; botUsername: string }>('/auth/config'), retry: false });
+  return cfg.data?.botUsername || FALLBACK_BOT;
+}
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -17,6 +23,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 export function GateScreen({ kind, me, message }: { kind: 'loading' | 'unregistered' | 'pending' | 'error'; me?: Me; message?: string }) {
+  const BOT = useBotUsername();
   if (kind === 'loading') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
@@ -79,7 +86,8 @@ const DEMO_USERS = [
 
 /** Вне Telegram: в dev-режиме можно войти под демо-пользователем */
 export function DevLogin() {
-  const cfg = useQuery({ queryKey: ['auth-config'], queryFn: () => api<{ devAuth: boolean }>('/auth/config'), retry: false });
+  const cfg = useQuery({ queryKey: ['auth-config'], queryFn: () => api<{ devAuth: boolean; botUsername: string }>('/auth/config'), retry: false });
+  const BOT = cfg.data?.botUsername || FALLBACK_BOT;
   const login = (id: string) => {
     setDevId(id);
     location.reload();

@@ -1,6 +1,26 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+/** "example.onrender.com" -> "https://example.onrender.com" (хостинг часто отдаёт только host) */
+export function withProtocol(url: string): string {
+  const v = url.trim().replace(/\/$/, '');
+  if (!v) return v;
+  return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+}
+
+/**
+ * Исправляет частую ошибку: в REDIS_URL вставлена вся команда
+ * "redis-cli --tls -u redis://..." вместо одного адреса.
+ */
+export function normalizeRedisUrl(raw: string): string {
+  let v = raw.trim();
+  const tls = /--tls\b/.test(v);
+  const m = v.match(/rediss?:\/\/\S+/);
+  if (m) v = m[0];
+  if (tls) v = v.replace(/^redis:\/\//, 'rediss://');
+  return v;
+}
+
 /**
  * Типизированный доступ к переменным окружения.
  * Все значения читаются из корневого .env (см. .env.example).
@@ -24,7 +44,8 @@ export class AppConfig {
     return this.str('TZ_NAME', 'Asia/Bishkek');
   }
   get publicApiUrl() {
-    return this.str('PUBLIC_API_URL', `http://localhost:${this.port}`).replace(/\/$/, '');
+    // На Render адрес сервиса доступен в RENDER_EXTERNAL_URL
+    return withProtocol(this.str('PUBLIC_API_URL') || this.str('RENDER_EXTERNAL_URL') || `http://localhost:${this.port}`);
   }
   get botToken() {
     return this.str('BOT_TOKEN');
@@ -51,7 +72,7 @@ export class AppConfig {
     return this.adminIds.includes(String(telegramId));
   }
   get redisUrl() {
-    return this.str('REDIS_URL', 'redis://localhost:6379');
+    return normalizeRedisUrl(this.str('REDIS_URL', 'redis://localhost:6379'));
   }
   get tundukApiUrl() {
     return this.str('TUNDUK_API_URL');
@@ -75,9 +96,14 @@ export class AppConfig {
     return !this.isProd && this.str('ALLOW_DEV_AUTH', 'false') === 'true';
   }
   get miniAppUrl() {
-    return this.str('MINIAPP_URL', 'http://localhost:5173').replace(/\/$/, '');
+    // Без MINIAPP_URL на хостинге: Mini App раздаётся backend'ом по адресу /app
+    return withProtocol(this.str('MINIAPP_URL') || (this.isHosted ? `${this.publicApiUrl}/app` : 'http://localhost:5173'));
   }
   get adminUrl() {
-    return this.str('ADMIN_URL', 'http://localhost:5174').replace(/\/$/, '');
+    return withProtocol(this.str('ADMIN_URL') || (this.isHosted ? `${this.publicApiUrl}/admin` : 'http://localhost:5174'));
+  }
+  /** Задан публичный https-адрес backend'а (PUBLIC_API_URL или RENDER_EXTERNAL_URL) */
+  get isHosted() {
+    return /^https:\/\//.test(this.publicApiUrl);
   }
 }

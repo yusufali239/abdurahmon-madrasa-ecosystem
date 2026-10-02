@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import type { User } from '@prisma/client';
+import { BotService } from '../bot/bot.service';
 import { AppConfig } from '../config/app-config.service';
 import { AuthService } from './auth.service';
 import { AllowPending, CurrentUser, TelegramGuard } from './guards';
@@ -10,6 +11,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly cfg: AppConfig,
+    private readonly botService: BotService,
   ) {}
 
   /** Текущий пользователь Mini App */
@@ -39,7 +41,7 @@ export class AuthController {
   config() {
     return {
       devAuth: this.cfg.allowDevAuth,
-      botUsername: this.cfg.botUsername,
+      botUsername: this.botService.bot?.isInited() ? this.botService.bot.botInfo.username : this.cfg.botUsername,
       hayriyaMbankNumber: this.cfg.hayriyaMbankNumber,
       hayriyaRecipientName: this.cfg.hayriyaRecipientName,
     };

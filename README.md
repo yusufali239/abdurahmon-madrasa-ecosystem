@@ -153,11 +153,17 @@ shared/            logo.svg, tailwind-preset, UI komponentlar
 
 ## 🚀 Hostingga chiqarish
 
-1. PostgreSQL va Redis (masalan Supabase + Upstash yoki `docker compose --profile full up -d --build`).
-2. Backend: `npm run build -w backend` → `npm run start:prod -w backend` (migratsiyalarni ham qo'llaydi) yoki `backend/Dockerfile`.
-3. `BOT_WEBHOOK_URL=https://<api-domen>/api/bot/webhook` qo'ying (yoki bo'sh qoldirib long-polling).
-4. Mini App va Admin: `npm run build -w miniapp`, `npm run build -w admin` → `dist/` ni istalgan statik hostingga (Vercel, Netlify, Nginx). SPA uchun barcha yo'llarni `index.html` ga yo'naltiring.
-5. @BotFather → Bot Settings → **Menu Button / Web App** ga `MINIAPP_URL` (https) ni kiriting.
+**Eng oson yo'l — Render Blueprint (bitta tugma).** Batafsil qadamlar (rus tilida): [DEPLOY_RU.md](DEPLOY_RU.md).
+
+* `render.yaml` ikkita xizmat yaratadi: Redis va bitta server. Server ichida API, bot, cron, Mini App (`/app`) va Admin panel (`/admin`) bor.
+* Sizdan faqat 4 ta qiymat so'raladi: `DATABASE_URL` (Supabase **Session pooler**), `BOT_TOKEN`, `ADMIN_IDS`, `HAYRIYA_MBANK_NUMBER`.
+* Birinchi ishga tushishda server o'zi bajaradi:
+  * migratsiyalarni qo'llaydi;
+  * baza bo'sh bo'lsa, seed qiladi (`SEED_DEMO=false` — demo ma'lumotlarsiz);
+  * botga «🕌 Madrasa» menyu tugmasini qo'yadi.
+* Sozlamalarni tekshirish: `npm run check`.
+
+Boshqa hosting: `npm run build:bundle`, keyin `npm run start:prod -w backend`, yoki `backend/Dockerfile` / `docker compose --profile full up -d --build`.
 
 ---
 

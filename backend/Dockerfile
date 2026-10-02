@@ -9,7 +9,11 @@ COPY admin/package.json admin/
 COPY prisma prisma
 RUN npm ci --include=dev
 COPY backend backend
-RUN npx prisma generate && npm run build -w backend
+COPY miniapp miniapp
+COPY admin admin
+COPY shared shared
+# Mini App (/app) и Admin (/admin) раздаются самим backend'ом
+RUN npm run build:bundle
 
 FROM node:22-alpine
 WORKDIR /app
@@ -21,6 +25,9 @@ COPY --from=build /app/package.json ./
 COPY --from=build /app/backend/package.json backend/
 COPY --from=build /app/backend/dist backend/dist
 COPY --from=build /app/backend/uploads backend/uploads
+COPY --from=build /app/backend/scripts backend/scripts
+COPY --from=build /app/miniapp/dist miniapp/dist
+COPY --from=build /app/admin/dist admin/dist
 WORKDIR /app/backend
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy --schema ../prisma/schema.prisma && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema ../prisma/schema.prisma && node scripts/seed-if-empty.js && node dist/main.js"]

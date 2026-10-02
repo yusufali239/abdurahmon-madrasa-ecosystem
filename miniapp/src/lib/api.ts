@@ -1,6 +1,9 @@
 import { tg } from './telegram';
 
-export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '');
+// Пустой VITE_API_URL в production-сборке = тот же домен (фронтенд раздаёт backend).
+// Может прийти только host ("api.onrender.com") — добавляем https://
+const rawApi = (import.meta.env.VITE_API_URL || (import.meta.env.PROD ? window.location.origin : 'http://localhost:3000')).trim().replace(/\/$/, '');
+export const API_URL = /^https?:\/\//i.test(rawApi) ? rawApi : `https://${rawApi}`;
 const DEV_KEY = 'madrasa.devTelegramId';
 
 export class ApiError extends Error {

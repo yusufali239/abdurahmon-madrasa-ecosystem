@@ -4,6 +4,8 @@ import { fileURLToPath, URL } from 'node:url';
 
 // Корневой .env общий для всех частей проекта (VITE_* переменные)
 export default defineConfig({
+  // VITE_BASE=/app/ (или /admin/) — когда фронтенд раздаётся самим backend'ом
+  base: process.env.VITE_BASE || '/',
   plugins: [react()],
   envDir: '..',
   resolve: {

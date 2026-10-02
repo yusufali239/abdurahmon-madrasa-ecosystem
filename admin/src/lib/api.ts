@@ -1,4 +1,7 @@
-export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000').replace(/\/$/, '');
+// Пустой VITE_API_URL в production-сборке = тот же домен (фронтенд раздаёт backend).
+// Может прийти только host ("api.onrender.com") — добавляем https://
+const rawApi = (import.meta.env.VITE_API_URL || (import.meta.env.PROD ? window.location.origin : 'http://localhost:3000')).trim().replace(/\/$/, '');
+export const API_URL = /^https?:\/\//i.test(rawApi) ? rawApi : `https://${rawApi}`;
 const KEY = 'madrasa.adminToken';
 
 export class ApiError extends Error {
@@ -39,7 +42,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   const data = text ? JSON.parse(text) : null;
   if (res.status === 401 && path.startsWith('/admin')) {
     setToken(null);
-    if (!location.pathname.startsWith('/login')) location.href = '/login';
+    if (!location.pathname.endsWith('/login')) location.href = `${import.meta.env.BASE_URL}login`;
   }
   if (!res.ok) {
     const msg = Array.isArray(data?.message) ? data.message.join(', ') : data?.message || 'Xatolik';

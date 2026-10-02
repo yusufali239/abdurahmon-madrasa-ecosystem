@@ -10,9 +10,10 @@
     "prebuild": "npm run prisma:generate",
     "build": "nest build",
     "start": "node dist/main.js",
-    "start:prod": "prisma migrate deploy --schema ../prisma/schema.prisma && node dist/main.js",
+    "start:prod": "prisma migrate deploy --schema ../prisma/schema.prisma && node scripts/seed-if-empty.js && node dist/main.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "simulate": "node scripts/simulate-bot.js"
+    "simulate": "node scripts/simulate-bot.js",
+    "check": "node scripts/check-env.js"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",

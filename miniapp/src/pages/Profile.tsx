@@ -315,7 +315,7 @@ export default function ProfilePage() {
           className="mt-6 w-full text-muted-foreground"
           onClick={() => {
             setDevId(null);
-            location.href = '/';
+            location.href = import.meta.env.BASE_URL;
           }}
         >
           Chiqish (dev)

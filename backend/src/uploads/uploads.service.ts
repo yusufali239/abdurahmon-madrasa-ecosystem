@@ -4,7 +4,10 @@ import { mkdir, writeFile } from 'fs/promises';
 import { extname, join } from 'path';
 import { AppConfig } from '../config/app-config.service';
 
-export const UPLOAD_ROOT = join(process.cwd(), 'uploads');
+/** Каталог пользовательских файлов (на хостинге — постоянный диск, UPLOAD_DIR) */
+export const UPLOAD_ROOT = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
+/** Встроенные файлы репозитория (примеры из seed: uploads/samples) */
+export const BUNDLED_UPLOADS = join(process.cwd(), 'uploads');
 export const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 
 const ALLOWED = /^(image\/(png|jpe?g|webp|gif|heic)|audio\/(mpeg|mp3|mp4|aac|ogg|wav|x-m4a|webm)|video\/(mp4|webm|quicktime)|application\/pdf)$/;
