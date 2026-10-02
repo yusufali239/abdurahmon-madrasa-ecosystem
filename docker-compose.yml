@@ -33,6 +33,30 @@ services:
       timeout: 3s
       retries: 10
 
+  # To'liq ishga tushirish (ixtiyoriy):  docker compose --profile full up -d --build
+  api:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: madrasa-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/madrasa?schema=public
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/app/backend/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
+  uploads:
   pgdata:
   redisdata:

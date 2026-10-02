@@ -1,0 +1,21 @@
+@import '../../shared/theme.css';
+
+/* Plyr — фирменные цвета */
+:root {
+  --plyr-color-main: #0e7a5a;
+  --plyr-video-control-background-hover: #0e7a5a;
+  --plyr-audio-control-background-hover: #0e7a5a;
+  --plyr-range-fill-background: #c4a15a;
+}
+
+body {
+  overscroll-behavior-y: none;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
