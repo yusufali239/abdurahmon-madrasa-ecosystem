@@ -12,6 +12,12 @@ import { SubjectsModule } from './subjects/subjects.module';
 import { TeachersModule } from './teachers/teachers.module';
 import { LessonsModule } from './lessons/lessons.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { UploadsModule } from './uploads/uploads.module';
+import { ContentModule } from './content/content.module';
+import { FundModule } from './fund/fund.module';
+import { PaymentsModule } from './payments/payments.module';
+import { NewsModule } from './news/news.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -25,7 +31,13 @@ import { SchedulerModule } from './scheduler/scheduler.module';
     UsersModule,
     SubjectsModule,
     TeachersModule,
+    UploadsModule,
     LessonsModule,
+    ContentModule,
+    FundModule,
+    PaymentsModule,
+    NewsModule,
+    AdminModule,
     SchedulerModule,
   ],
   controllers: [HealthController],

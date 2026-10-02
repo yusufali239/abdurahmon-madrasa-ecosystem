@@ -3,7 +3,8 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { MessengerService } from '../bot/messenger.service';
 import { SessionsService } from '../lessons/sessions.service';
-import { MessageJob, NOTIFICATIONS_QUEUE, ReminderJob } from './queue.constants';
+import { NewsService } from '../news/news.service';
+import { BroadcastNewsJob, MessageJob, NOTIFICATIONS_QUEUE, ReminderJob } from './queue.constants';
 
 /** Обработчик очереди уведомлений. Лимит ~25 сообщений/сек (ограничение Telegram — 30). */
 @Processor(NOTIFICATIONS_QUEUE, { concurrency: 5, limiter: { max: 25, duration: 1000 } })
@@ -13,6 +14,7 @@ export class NotificationsProcessor extends WorkerHost {
   constructor(
     private readonly messenger: MessengerService,
     private readonly sessions: SessionsService,
+    private readonly news: NewsService,
   ) {
     super();
   }
@@ -25,6 +27,8 @@ export class NotificationsProcessor extends WorkerHost {
       }
       case 'reminder':
         return this.sessions.sendReminder((job.data as ReminderJob).sessionId);
+      case 'broadcast-news':
+        return this.news.fanOut((job.data as BroadcastNewsJob).newsId);
       default:
         this.logger.warn(`Noma'lum vazifa: ${job.name}`);
     }
